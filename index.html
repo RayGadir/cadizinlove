@@ -12,14 +12,20 @@
 </head>
 <body>
   <header class="topbar">
-    <h1 id="group-name">Cádiz in Love</h1>
+    <button class="menu-btn" id="menu-btn" aria-label="Menú">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="header-title">
+      <div class="header-kicker">Coro · Cádiz 2026</div>
+      <div class="header-name" id="group-name">Cádiz in Love</div>
+    </div>
     <div class="avatar" id="admin-avatar" title="Cargando...">…</div>
   </header>
 
-  <nav class="tabs" id="tabs">
-    <button class="tab-btn active" data-tab="inicio">🏠 Inicio</button>
-    <button class="tab-btn" data-tab="libreto">📖 Libreto</button>
-    <button class="tab-btn" data-tab="audios">🎧 Audios</button>
+  <nav class="nav-menu hidden" id="tabs">
+    <button class="nav-menu-item active" data-tab="inicio">Inicio</button>
+    <button class="nav-menu-item" data-tab="libreto">Libreto</button>
+    <button class="nav-menu-item" data-tab="audios">Audios</button>
   </nav>
 
   <div class="search-row hidden" id="search-row">

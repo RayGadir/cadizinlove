@@ -51,6 +51,7 @@ const state = {
 const el = {
   groupName: document.getElementById('group-name'),
   adminAvatar: document.getElementById('admin-avatar'),
+  menuBtn: document.getElementById('menu-btn'),
   tabs: document.getElementById('tabs'),
   searchRow: document.getElementById('search-row'),
   searchInput: document.getElementById('search-input'),
@@ -334,14 +335,19 @@ function hideDetail() {
 
 function switchTab(tab) {
   state.activeTab = tab;
-  [...el.tabs.querySelectorAll('.tab-btn')].forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  [...el.tabs.querySelectorAll('.nav-menu-item')].forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   hideDetail();
+  el.tabs.classList.add('hidden');
 }
 
 el.backBtn.addEventListener('click', hideDetail);
 
+el.menuBtn.addEventListener('click', () => {
+  el.tabs.classList.toggle('hidden');
+});
+
 el.tabs.addEventListener('click', (e) => {
-  const btn = e.target.closest('.tab-btn');
+  const btn = e.target.closest('.nav-menu-item');
   if (!btn) return;
   switchTab(btn.dataset.tab);
 });
