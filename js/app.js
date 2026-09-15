@@ -24,6 +24,11 @@ const AUDIO_TYPE_LABELS = {
   guitarra: 'Guitarra',
   voces: 'Voces',
 };
+const ROLE_META = {
+  director: { label: 'Director', color: 'var(--gold-2)', border: 'rgba(200,165,91,0.5)' },
+  corista: { label: 'Corista', color: 'var(--accent-300)', border: 'var(--accent-700)' },
+  pendiente: { label: 'Pendiente', color: 'var(--neutral-500)', border: 'var(--neutral-700)' },
+};
 
 function kindIndex(kind) {
   const i = KIND_ORDER.indexOf(kind);
@@ -37,7 +42,8 @@ function audioTypeLabel(type) {
 const state = {
   songs: [],
   avisos: [],
-  activeTab: 'inicio',
+  members: [],
+  screen: 'login',
   searchQuery: '',
   playlist: [],
   playlistIndex: -1,
@@ -46,28 +52,65 @@ const state = {
   currentSongId: null,
   loopEnabled: false,
   isAdmin: false,
+  letraSongId: null,
+  letraLines: [],
 };
 
 const el = {
   groupName: document.getElementById('group-name'),
   adminAvatar: document.getElementById('admin-avatar'),
-  menuBtn: document.getElementById('menu-btn'),
-  tabs: document.getElementById('tabs'),
+  appFrame: document.getElementById('app-frame'),
+
+  screenLogin: document.getElementById('screen-login'),
+  loginEmail: document.getElementById('login-email'),
+  loginPassword: document.getElementById('login-password'),
+  loginSubmit: document.getElementById('login-submit'),
+  loginPedir: document.getElementById('login-pedir'),
+
+  screenPendiente: document.getElementById('screen-pendiente'),
+  pendienteVolver: document.getElementById('pendiente-volver'),
+
+  topbar: document.getElementById('topbar'),
+  drawerBackdrop: document.getElementById('drawer-backdrop'),
+  drawerPanel: document.getElementById('drawer-panel'),
+  drawerSub: document.getElementById('drawer-sub'),
+  drawerNav: document.getElementById('drawer-nav'),
+  drawerLogout: document.getElementById('drawer-logout'),
+  drawerAdminCount: document.getElementById('drawer-admin-count'),
+
   searchRow: document.getElementById('search-row'),
   searchInput: document.getElementById('search-input'),
+
   inicioView: document.getElementById('inicio-view'),
   inicioGreeting: document.getElementById('inicio-greeting'),
   avisosList: document.getElementById('avisos-list'),
   repertoireCount: document.getElementById('repertoire-count'),
   repertoireList: document.getElementById('repertoire-list'),
+
   libretoView: document.getElementById('libreto-view'),
   audiosView: document.getElementById('audios-view'),
   audiosList: document.getElementById('audios-list'),
-  songDetail: document.getElementById('song-detail'),
-  detailKind: document.getElementById('detail-kind'),
-  detailTitle: document.getElementById('detail-title'),
-  detailLetter: document.getElementById('detail-letter'),
-  backBtn: document.getElementById('back-btn'),
+
+  letraView: document.getElementById('letra-view'),
+  letraBack: document.getElementById('letra-back'),
+  letraTitle: document.getElementById('letra-title'),
+  letraVoiceRow: document.getElementById('letra-voice-row'),
+  letraLines: document.getElementById('letra-lines'),
+  letraFootnote: document.getElementById('letra-footnote'),
+
+  directorView: document.getElementById('director-view'),
+  directorPieces: document.getElementById('director-pieces'),
+  directorRequests: document.getElementById('director-requests'),
+  directorRequestsCount: document.getElementById('director-requests-count'),
+
+  adminView: document.getElementById('admin-view'),
+  adminStatMembers: document.getElementById('admin-stat-members'),
+  adminStatDirectors: document.getElementById('admin-stat-directors'),
+  adminStatPending: document.getElementById('admin-stat-pending'),
+  adminRequests: document.getElementById('admin-requests'),
+  adminMembers: document.getElementById('admin-members'),
+  adminActivity: document.getElementById('admin-activity'),
+
   rehearsalToggle: document.getElementById('rehearsal-toggle'),
   rehearsalBar: document.getElementById('rehearsal-bar'),
   rehearsalClose: document.getElementById('rehearsal-close'),
@@ -87,10 +130,10 @@ const el = {
 };
 
 // No hay backend, así que no hay cuentas ni contraseñas reales: el rol de
-// administrador es solo un ajuste guardado en este navegador. Sirve para
-// distinguir, en este dispositivo, a quien gestiona el tablón/repertorio de
-// quien solo lo consulta — no es seguridad real ni funciona en otro
-// dispositivo o navegador.
+// administrador es solo un ajuste guardado en este navegador, y el propio
+// login no comprueba nada todavía (es la maqueta visual, tal y como se trajo
+// de Claude Design). Sirve para distinguir, en este dispositivo, a quien
+// gestiona el tablón/repertorio de quien solo lo consulta.
 const ADMIN_STORAGE_KEY = 'cadizInLove.isAdmin';
 function initAdmin() {
   localStorage.setItem(ADMIN_STORAGE_KEY, 'true');
@@ -99,6 +142,7 @@ function initAdmin() {
   el.adminAvatar.title = state.isAdmin
     ? 'Administrador en este navegador (ajuste local, no es una cuenta real)'
     : 'Miembro';
+  el.drawerSub.textContent = state.isAdmin ? 'Administrador' : 'Miembro';
   el.inicioGreeting.textContent = state.isAdmin ? 'Bienvenido, administrador' : 'Bienvenido';
 }
 
@@ -107,7 +151,8 @@ function initAdmin() {
 // que le dejamos al final de la página se recalcula cada vez que cambia algo
 // que puede afectar a esa altura, para que nunca tape el final de una letra.
 function syncBottomPadding() {
-  document.body.style.paddingBottom = `${el.bottomBars.offsetHeight + 16}px`;
+  const h = el.bottomBars.offsetHeight;
+  el.appFrame.style.paddingBottom = h ? `${h + 16}px` : '0px';
 }
 window.addEventListener('resize', syncBottomPadding);
 
@@ -148,14 +193,16 @@ function getAudioUrl(song, type) {
 }
 
 async function loadData() {
-  const [songsRes, avisosRes] = await Promise.all([
+  const [songsRes, avisosRes, membersRes] = await Promise.all([
     fetch('data/songs.json'),
     fetch('data/avisos.json'),
+    fetch('data/members.json'),
   ]);
   const data = await songsRes.json();
   el.groupName.textContent = data.group?.name || 'Cádiz in Love';
   state.songs = data.songs || [];
   state.avisos = await avisosRes.json();
+  state.members = await membersRes.json();
 
   const typesPresent = new Set();
   state.songs.forEach((song) => (song.audios || []).forEach((a) => typesPresent.add(a.type)));
@@ -174,7 +221,83 @@ function render() {
   renderInicio();
   renderSectioned(el.libretoView, 'libreto');
   renderSectioned(el.audiosList, 'audios');
+  renderDirector();
+  renderAdmin();
 }
+
+/* ══════════════════════════ Navegación entre pantallas ══════════════════════════ */
+
+const SCREEN_ELS = {
+  inicio: el.inicioView,
+  libreto: el.libretoView,
+  audios: el.audiosView,
+  letra: el.letraView,
+  director: el.directorView,
+  admin: el.adminView,
+};
+// Estas pantallas usan la cabecera compartida (#topbar); director y admin
+// llevan su propia cabecera incrustada.
+const CHROME_SCREENS = new Set(['inicio', 'libreto', 'audios', 'letra']);
+const SEARCH_SCREENS = new Set(['libreto', 'audios']);
+
+function goScreen(screen) {
+  state.screen = screen;
+  el.screenLogin.classList.add('hidden');
+  el.screenPendiente.classList.add('hidden');
+  Object.entries(SCREEN_ELS).forEach(([name, elm]) => elm.classList.toggle('hidden', name !== screen));
+  el.topbar.classList.toggle('hidden', !CHROME_SCREENS.has(screen));
+  el.searchRow.classList.toggle('hidden', !SEARCH_SCREENS.has(screen));
+  closeDrawer();
+  [...el.drawerNav.querySelectorAll('.drawer-item')].forEach((b) => b.classList.toggle('active', b.dataset.screen === screen));
+  window.scrollTo(0, 0);
+  syncBottomPadding();
+}
+
+function goAuthScreen(screen) {
+  state.screen = screen;
+  el.topbar.classList.add('hidden');
+  el.searchRow.classList.add('hidden');
+  Object.values(SCREEN_ELS).forEach((elm) => elm.classList.add('hidden'));
+  el.screenLogin.classList.toggle('hidden', screen !== 'login');
+  el.screenPendiente.classList.toggle('hidden', screen !== 'pendiente');
+  closeDrawer();
+  window.scrollTo(0, 0);
+  syncBottomPadding();
+}
+
+function openDrawer() {
+  el.drawerBackdrop.classList.remove('hidden');
+  el.drawerPanel.classList.remove('hidden');
+}
+function closeDrawer() {
+  el.drawerBackdrop.classList.add('hidden');
+  el.drawerPanel.classList.add('hidden');
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.menu-btn')) openDrawer();
+});
+el.drawerBackdrop.addEventListener('click', closeDrawer);
+el.drawerNav.addEventListener('click', (e) => {
+  const btn = e.target.closest('.drawer-item');
+  if (!btn || !btn.dataset.screen) return;
+  goScreen(btn.dataset.screen);
+});
+el.drawerLogout.addEventListener('click', () => goAuthScreen('login'));
+
+// El login es la maqueta visual tal cual se trajo de Claude Design: no
+// comprueba usuario/contraseña todavía (no hay backend). "Entrar" lleva
+// directo a Inicio, igual que en el diseño original.
+el.loginSubmit.addEventListener('click', () => goScreen('inicio'));
+el.loginPedir.addEventListener('click', (e) => { e.preventDefault(); goAuthScreen('pendiente'); });
+el.pendienteVolver.addEventListener('click', () => goAuthScreen('login'));
+
+el.searchInput.addEventListener('input', () => {
+  state.searchQuery = el.searchInput.value;
+  render();
+});
+
+/* ══════════════════════════ Inicio (tablón) ══════════════════════════ */
 
 function renderInicio() {
   renderAvisos();
@@ -186,7 +309,7 @@ function renderAvisos() {
   if (state.avisos.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Todavía no hay avisos. Cuando el director publique alguno, aparecerá aquí.';
+    empty.textContent = 'Todavía no hay avisos. Cuando la dirección publique alguno, aparecerá aquí.';
     el.avisosList.appendChild(empty);
     return;
   }
@@ -200,6 +323,7 @@ function renderAvisos() {
       </div>
       <h3 class="aviso-title">${aviso.title || ''}</h3>
       <p class="aviso-body">${aviso.body || ''}</p>
+      ${aviso.signoff ? `<div class="aviso-signoff">${aviso.signoff}</div>` : ''}
     `;
     el.avisosList.appendChild(card);
   });
@@ -223,10 +347,12 @@ function renderRepertoireSummary() {
       <span class="repertoire-title">${section.title.replace(' (con Estribillo)', '')}</span>
       <span class="repertoire-status">${hasSongs ? 'Disponible' : 'Sin letras todavía'}</span>
     `;
-    row.addEventListener('click', () => switchTab('libreto'));
+    row.addEventListener('click', () => goScreen('libreto'));
     el.repertoireList.appendChild(row);
   });
 }
+
+/* ══════════════════════════ Libreto / Audios (listas) ══════════════════════════ */
 
 function renderSectioned(container, mode) {
   const query = normalizeForSearch(state.searchQuery);
@@ -278,7 +404,7 @@ function buildLibretoRow(song) {
       <div class="song-card-title">${song.title}</div>
     </div>
   `;
-  card.addEventListener('click', () => showDetail(song));
+  card.addEventListener('click', () => openLetra(song));
   return card;
 }
 
@@ -315,47 +441,179 @@ function toggleAudioRow(song) {
   playSingleSong(song);
 }
 
-function showDetail(song) {
-  el.songDetail.classList.remove('hidden');
-  el.libretoView.classList.add('hidden');
-  el.audiosView.classList.add('hidden');
-  el.detailKind.textContent = KIND_LABELS[song.kind] || song.kind;
-  el.detailKind.style.setProperty('--card-color', `var(--kind-${song.kind})`);
-  el.detailTitle.textContent = song.title;
-  el.detailLetter.textContent = normalizeLetter(song.letter);
+/* ══════════════════════════ Letra (lectura + karaoke cuando hay audio) ══════════════════════════ */
+
+function openLetra(song) {
+  state.letraSongId = song.id;
+  el.letraTitle.textContent = song.title;
+  renderLetraVoiceRow(song);
+  renderLetraLines(song);
+  goScreen('letra');
 }
 
-function hideDetail() {
-  el.songDetail.classList.add('hidden');
-  el.inicioView.classList.toggle('hidden', state.activeTab !== 'inicio');
-  el.libretoView.classList.toggle('hidden', state.activeTab !== 'libreto');
-  el.audiosView.classList.toggle('hidden', state.activeTab !== 'audios');
-  el.searchRow.classList.toggle('hidden', state.activeTab === 'inicio');
+function renderLetraVoiceRow(song) {
+  const hasAudio = (song.audios || []).length > 0;
+  const isCurrent = song.id === state.currentSongId;
+  el.letraVoiceRow.innerHTML = `
+    <span class="letra-voice-tag">${KIND_LABELS[song.kind] || song.kind}</span>
+    ${hasAudio
+      ? `<button class="song-card-play btn-icon" id="letra-play-btn" style="width:36px;height:36px;">${isCurrent && !el.audioEl.paused ? '⏸' : '▶'}</button>
+         <span class="letra-voice-note">Toca para escuchar mientras sigues la letra.</span>`
+      : '<span class="letra-voice-note">Todavía no hay audio para esta letra.</span>'}
+  `;
+  if (hasAudio) {
+    document.getElementById('letra-play-btn').addEventListener('click', () => toggleAudioRow(song));
+  }
 }
 
-function switchTab(tab) {
-  state.activeTab = tab;
-  [...el.tabs.querySelectorAll('.nav-menu-item')].forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-  hideDetail();
-  el.tabs.classList.add('hidden');
+function renderLetraLines(song) {
+  const rawLines = normalizeLetter(song.letter).split('\n');
+  const lines = [];
+  let pendingGap = false;
+  rawLines.forEach((raw) => {
+    if (raw.trim() === '') { pendingGap = true; return; }
+    lines.push({ text: raw, gap: pendingGap });
+    pendingGap = false;
+  });
+  state.letraLines = lines;
+  el.letraLines.innerHTML = lines
+    .map((l) => `<p class="letra-line${l.gap ? ' gap' : ''}">${l.text}</p>`)
+    .join('');
+  el.letraFootnote.classList.add('hidden');
+  updateKaraokeHighlight();
 }
 
-el.backBtn.addEventListener('click', hideDetail);
+// Mientras suena el audio de la canción que se está leyendo, resalta la
+// línea correspondiente según la posición real de reproducción (no hay
+// datos de tiempo por verso, así que se reparte el texto a partes iguales
+// sobre la duración total — una aproximación razonable, no exacta).
+function updateKaraokeHighlight() {
+  if (state.screen !== 'letra' || !state.letraLines.length) return;
+  const children = [...el.letraLines.children];
+  const isCurrent = state.letraSongId === state.currentSongId;
+  if (!isCurrent || !el.audioEl.duration) {
+    children.forEach((p) => p.classList.remove('current', 'near'));
+    return;
+  }
+  const idx = Math.min(children.length - 1, Math.floor((el.audioEl.currentTime / el.audioEl.duration) * children.length));
+  children.forEach((p, i) => {
+    p.classList.toggle('current', i === idx);
+    p.classList.toggle('near', Math.abs(i - idx) === 1);
+  });
+}
 
-el.menuBtn.addEventListener('click', () => {
-  el.tabs.classList.toggle('hidden');
-});
+el.letraBack.addEventListener('click', () => goScreen('libreto'));
 
-el.tabs.addEventListener('click', (e) => {
-  const btn = e.target.closest('.nav-menu-item');
-  if (!btn) return;
-  switchTab(btn.dataset.tab);
-});
+/* ══════════════════════════ Panel del Director ══════════════════════════ */
 
-el.searchInput.addEventListener('input', () => {
-  state.searchQuery = el.searchInput.value;
-  render();
-});
+function renderDirector() {
+  el.directorPieces.innerHTML = '';
+  SECTIONS.forEach((section, i) => {
+    const items = state.songs.filter((s) => section.kinds.includes(s.kind));
+    const hasAny = items.length > 0;
+    const hasAudio = items.some((s) => (s.audios || []).length > 0);
+    const card = document.createElement('div');
+    card.className = 'piece-card' + (hasAny ? '' : ' is-empty');
+    card.innerHTML = `
+      <div class="piece-card-top">
+        <span class="num">${String(i + 1).padStart(2, '0')}</span>
+        <span class="name">${section.title.replace(' (con Estribillo)', '')}</span>
+        <span class="status">${hasAny ? (hasAudio ? 'Letra y audio' : 'Solo letra') : 'Sin letra'}</span>
+      </div>
+      <div class="piece-card-actions">
+        <button class="btn btn-gold" style="min-height:38px;font-size:12px;">${hasAny ? 'Editar letra' : 'Escribir letra'}</button>
+        <button class="btn btn-ghost" style="min-height:38px;font-size:12px;">Subir audio</button>
+        ${hasAny ? '<button class="btn btn-ghost" style="min-height:38px;font-size:12px;">Avisar del cambio</button>' : ''}
+      </div>
+      ${hasAny ? `<div class="piece-card-meta">${items.length} pieza${items.length === 1 ? '' : 's'} escrita${items.length === 1 ? '' : 's'}</div>` : ''}
+    `;
+    el.directorPieces.appendChild(card);
+  });
+
+  const pending = state.members.filter((m) => m.role === 'pendiente');
+  el.directorRequestsCount.textContent = String(pending.length);
+  el.directorRequests.innerHTML = '';
+  if (pending.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Nadie está esperando entrada ahora mismo.';
+    el.directorRequests.appendChild(empty);
+  } else {
+    pending.forEach((m) => el.directorRequests.appendChild(buildRequestCard(m)));
+  }
+}
+
+function buildRequestCard(member) {
+  const card = document.createElement('div');
+  card.className = 'request-card';
+  card.innerHTML = `
+    <div class="who">
+      <span class="name">${member.name}</span>
+      <span class="meta">${member.email || 'Sin correo registrado'}</span>
+    </div>
+    <div class="signatures">Falta tu firma</div>
+    <div class="actions">
+      <button class="btn btn-primary approve">Aprobar</button>
+      <button class="reject">Rechazar</button>
+    </div>
+    <div class="hint">La voz se le asigna después, en la lista de componentes.</div>
+  `;
+  return card;
+}
+
+/* ══════════════════════════ Panel de Administración ══════════════════════════ */
+
+function renderAdmin() {
+  const directors = state.members.filter((m) => m.role === 'director').length;
+  const pending = state.members.filter((m) => m.role === 'pendiente');
+  const active = state.members.filter((m) => m.role !== 'pendiente').length;
+
+  el.adminStatMembers.textContent = String(active);
+  el.adminStatDirectors.textContent = String(directors);
+  el.adminStatPending.textContent = String(pending.length);
+  el.drawerAdminCount.classList.toggle('hidden', pending.length === 0);
+  el.drawerAdminCount.textContent = String(pending.length);
+
+  el.adminRequests.innerHTML = '';
+  if (pending.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No hay nada pendiente de tu firma.';
+    el.adminRequests.appendChild(empty);
+  } else {
+    pending.forEach((m) => el.adminRequests.appendChild(buildRequestCard(m)));
+  }
+
+  el.adminMembers.innerHTML = '';
+  if (state.members.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Todavía no hay componentes registrados.';
+    el.adminMembers.appendChild(empty);
+  } else {
+    state.members.forEach((m) => {
+      const meta = ROLE_META[m.role] || ROLE_META.pendiente;
+      const row = document.createElement('div');
+      row.className = 'member-row';
+      row.innerHTML = `
+        <span class="info">
+          <span class="name">${m.name}</span>
+          <span class="voice">${m.voice || 'Sin voz asignada'}</span>
+        </span>
+        <span class="role" style="color:${meta.color};border:1px solid ${meta.border};">${meta.label}</span>
+      `;
+      el.adminMembers.appendChild(row);
+    });
+  }
+
+  el.adminActivity.innerHTML = '';
+  const activityEmpty = document.createElement('div');
+  activityEmpty.className = 'empty-state';
+  activityEmpty.textContent = 'Todavía no hay actividad registrada.';
+  el.adminActivity.appendChild(activityEmpty);
+}
+
+/* ══════════════════════════ Reproductor (audio real, compartido) ══════════════════════════ */
 
 // Todas las canciones con audio que coinciden con la búsqueda activa, en el
 // mismo orden en que aparecen en la pestaña Audios. Es la lista sobre la que
@@ -411,13 +669,16 @@ function stopRehearsal() {
   el.rehearsalBar.classList.add('hidden');
   el.audioEl.pause();
   el.playerBar.classList.add('hidden');
-  hideDetail();
-  renderAudios();
+  refreshNowPlayingUI();
   syncBottomPadding();
 }
 
-function renderAudios() {
+function refreshNowPlayingUI() {
   renderSectioned(el.audiosList, 'audios');
+  if (state.screen === 'letra' && state.letraSongId) {
+    const song = state.songs.find((s) => s.id === state.letraSongId);
+    if (song) renderLetraVoiceRow(song);
+  }
 }
 
 el.rehearsalToggle.addEventListener('click', startRehearsal);
@@ -438,7 +699,7 @@ function playCurrent() {
   el.playerTitle.textContent = song.title;
 
   if (state.rehearsalMode) {
-    showDetail(song);
+    openLetra(song);
     el.rehearsalCurrentTitle.textContent = song.title;
     el.rehearsalPosition.textContent = `${state.playlistIndex + 1} / ${state.playlist.length}`;
   }
@@ -490,16 +751,17 @@ el.playerPlayPause.addEventListener('click', () => {
 });
 
 // Única fuente de verdad para el icono de play/pausa y para resaltar la fila
-// que suena en la lista de Audios: los eventos del propio <audio>, no cada
-// sitio que llama a play()/pause() (así se mantiene sincronizado también si
-// el audio se pausa desde los controles del sistema operativo).
+// que suena en la lista de Audios (y en Letra): los eventos del propio
+// <audio>, no cada sitio que llama a play()/pause() (así se mantiene
+// sincronizado también si el audio se pausa desde los controles del sistema
+// operativo).
 el.audioEl.addEventListener('play', () => {
   el.playerPlayPause.textContent = '⏸';
-  renderAudios();
+  refreshNowPlayingUI();
 });
 el.audioEl.addEventListener('pause', () => {
   el.playerPlayPause.textContent = '▶';
-  renderAudios();
+  refreshNowPlayingUI();
 });
 
 el.audioEl.addEventListener('ended', playNext);
@@ -523,10 +785,13 @@ el.playerSeek.addEventListener('change', () => {
 });
 
 el.audioEl.addEventListener('timeupdate', () => {
-  if (isSeeking || !el.audioEl.duration) return;
-  el.playerSeek.value = (el.audioEl.currentTime / el.audioEl.duration) * SEEK_RESOLUTION;
+  if (!isSeeking && el.audioEl.duration) {
+    el.playerSeek.value = (el.audioEl.currentTime / el.audioEl.duration) * SEEK_RESOLUTION;
+  }
+  updateKaraokeHighlight();
 });
 
 syncBottomPadding();
 initAdmin();
+goAuthScreen('login');
 loadData();

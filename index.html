@@ -6,94 +6,266 @@
 <meta name="description" content="Libreto y audios del coro Cádiz in Love: letras y pistas de ensayo por canción." />
 <meta name="theme-color" content="#161826" />
 <title>Cádiz in Love</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23161826'/%3E%3Cpath d='M50 80 C18 55 8 33 25 20 C36 12 48 17 50 30 C52 17 64 12 75 20 C92 33 82 55 50 80 Z' fill='%239184d9'/%3E%3C/svg%3E" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23161826'/%3E%3Cpath d='M50 80 C18 55 8 33 25 20 C36 12 48 17 50 30 C52 17 64 12 75 20 C92 33 82 55 50 80 Z' fill='%23c8a55b'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="css/fonts.css" />
 <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <button class="menu-btn" id="menu-btn" aria-label="Menú">
-      <span></span><span></span><span></span>
-    </button>
-    <div class="header-title">
-      <div class="header-kicker">Coro · Cádiz 2026</div>
-      <div class="header-name" id="group-name">Cádiz in Love</div>
+  <div class="app-frame" id="app-frame">
+
+    <!-- ═══ LOGIN ═══ -->
+    <section id="screen-login" class="screen screen-login hidden">
+      <div class="confetti" id="confetti">
+        <span style="left: 6%; width: 6px; height: 9px; background: #c8a55b; --dx: 24px; animation-duration: 6.4s; animation-delay: -0.2s;"></span>
+        <span style="left: 14%; width: 5px; height: 5px; background: #d9d2f5; border-radius: 50%; --dx: -18px; animation-duration: 7.8s; animation-delay: -1.4s;"></span>
+        <span style="left: 22%; width: 7px; height: 4px; background: #9184d9; --dx: 30px; animation-duration: 5.6s; animation-delay: -2.9s;"></span>
+        <span style="left: 31%; width: 5px; height: 10px; background: #e0b96a; --dx: -26px; animation-duration: 8.6s; animation-delay: -0.7s;"></span>
+        <span style="left: 39%; width: 6px; height: 6px; background: #b8496b; border-radius: 50%; --dx: 16px; animation-duration: 6.9s; animation-delay: -3.6s;"></span>
+        <span style="left: 47%; width: 4px; height: 9px; background: #c8a55b; --dx: -12px; animation-duration: 7.2s; animation-delay: -1.9s;"></span>
+        <span style="left: 56%; width: 7px; height: 5px; background: #d2cefd; --dx: 28px; animation-duration: 5.9s; animation-delay: -4.4s;"></span>
+        <span style="left: 64%; width: 5px; height: 5px; background: #e0b96a; border-radius: 50%; --dx: -22px; animation-duration: 8.1s; animation-delay: -2.2s;"></span>
+        <span style="left: 72%; width: 6px; height: 10px; background: #9184d9; --dx: 20px; animation-duration: 6.6s; animation-delay: -5.1s;"></span>
+        <span style="left: 80%; width: 4px; height: 7px; background: #c8a55b; --dx: -30px; animation-duration: 7.5s; animation-delay: -0.9s;"></span>
+        <span style="left: 88%; width: 6px; height: 6px; background: #b8496b; border-radius: 50%; --dx: 14px; animation-duration: 6.1s; animation-delay: -3.1s;"></span>
+        <span style="left: 94%; width: 5px; height: 9px; background: #e7e5fe; --dx: -16px; animation-duration: 8.9s; animation-delay: -1.6s;"></span>
+      </div>
+
+      <div class="login-body">
+        <div class="login-brand">
+          <div class="rule-row">
+            <span class="rule"></span>
+            <span class="kicker">Carnaval de Cádiz</span>
+            <span class="rule right"></span>
+          </div>
+          <h1>Cádiz<br><em>in Love</em></h1>
+          <p>Coro · el libreto y los audios del ensayo</p>
+        </div>
+
+        <div class="login-card">
+          <label class="field">
+            <span>Email</span>
+            <input type="email" id="login-email" placeholder="tu@correo.es" />
+          </label>
+          <label class="field">
+            <span>Contraseña</span>
+            <input type="password" id="login-password" placeholder="••••••••" />
+          </label>
+          <div class="login-row">
+            <label class="login-remember">
+              <input type="checkbox" checked />
+              Recordarme
+            </label>
+            <a href="#" class="login-forgot">He olvidado la contraseña</a>
+          </div>
+          <button id="login-submit" class="login-submit">Entrar al ensayo</button>
+        </div>
+
+        <div class="login-footer">
+          ¿Nuevo en el coro? <a href="#" id="login-pedir">Pide tu entrada</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PENDIENTE DE APROBACIÓN ═══ -->
+    <section id="screen-pendiente" class="screen screen-pendiente hidden">
+      <div class="pendiente-head">
+        <div class="rule-row">
+          <span class="rule"></span>
+          <span class="kicker">Solicitud enviada</span>
+        </div>
+        <h1>Te falta que te abran<br>la puerta</h1>
+        <p>Hacen falta dos firmas: un director y el administrador del coro. En cualquier orden.</p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+        <div class="signature-row">
+          <span class="icon">
+            <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M128 40a96 96 0 1 0 96 96 96.11 96.11 0 0 0-96-96Zm0 176a80 80 0 1 1 80-80 80.09 80.09 0 0 1-80 80Zm45.66-125.66a8 8 0 0 1 0 11.32L133.66 128l-28-28a8 8 0 0 1 11.31-11.31L128 100.69l34.34-34.35a8 8 0 0 1 11.32 0Z" opacity="0.35"></path><path d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm8-112v40a8 8 0 0 1-16 0v-40a8 8 0 0 1 16 0Z"></path></svg>
+          </span>
+          <span class="info">
+            <span class="name">Director</span>
+            <span class="sub">Pendiente de asignar</span>
+          </span>
+          <span class="status">Pendiente</span>
+        </div>
+        <div class="signature-row">
+          <span class="icon">
+            <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm8-112v40a8 8 0 0 1-16 0v-40a8 8 0 0 1 16 0Z"></path></svg>
+          </span>
+          <span class="info">
+            <span class="name">Administrador</span>
+            <span class="sub">Responsable del coro</span>
+          </span>
+          <span class="status">Pendiente</span>
+        </div>
+      </div>
+
+      <p class="pendiente-note">Te avisamos aquí dentro en cuanto estés dentro. El director te asignará tu voz al aprobarte.</p>
+
+      <button id="pendiente-volver" class="btn btn-ghost">Volver a la entrada</button>
+    </section>
+
+    <!-- ═══ Cabecera + menú lateral (pantallas con sesión) ═══ -->
+    <header class="topbar hidden" id="topbar">
+      <button class="menu-btn" id="menu-btn" aria-label="Menú">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="header-title">
+        <div class="header-kicker">Coro · Cádiz 2026</div>
+        <div class="header-name" id="group-name">Cádiz in Love</div>
+      </div>
+      <div class="avatar" id="admin-avatar" title="Cargando...">…</div>
+    </header>
+
+    <div class="drawer-backdrop hidden" id="drawer-backdrop"></div>
+    <nav class="drawer-panel hidden" id="drawer-panel">
+      <div class="drawer-head">
+        <span class="kicker">Coro · Cádiz 2026</span>
+        <span class="name">Cádiz in Love</span>
+        <span class="sub" id="drawer-sub">Administrador</span>
+      </div>
+      <div class="drawer-nav" id="drawer-nav">
+        <button class="drawer-item" data-screen="inicio"><span class="stripe"></span>Novedades</button>
+        <button class="drawer-item" data-screen="libreto"><span class="stripe"></span>Repertorio</button>
+        <button class="drawer-item" data-screen="audios"><span class="stripe"></span>Audios</button>
+        <button class="drawer-item" data-screen="" disabled><span class="stripe"></span><span class="fill">Mi voz</span><span class="meta">Sin asignar</span></button>
+        <button class="drawer-item" data-screen="" disabled><span class="stripe"></span>Perfil del coro</button>
+        <button class="drawer-item" data-screen="director"><span class="stripe"></span>Panel del director</button>
+        <button class="drawer-item" data-screen="admin"><span class="stripe"></span><span class="fill">Administración</span><span class="count hidden" id="drawer-admin-count"></span></button>
+        <button class="drawer-item" data-screen="" disabled><span class="stripe"></span>Ajustes</button>
+      </div>
+      <button id="drawer-logout" class="drawer-logout">Salir</button>
+    </nav>
+
+    <div class="search-row hidden" id="search-row">
+      <input type="search" id="search-input" class="search-input" placeholder="Buscar canción..." />
     </div>
-    <div class="avatar" id="admin-avatar" title="Cargando...">…</div>
-  </header>
 
-  <nav class="nav-menu hidden" id="tabs">
-    <button class="nav-menu-item active" data-tab="inicio">Inicio</button>
-    <button class="nav-menu-item" data-tab="libreto">Libreto</button>
-    <button class="nav-menu-item" data-tab="audios">Audios</button>
-  </nav>
+    <main id="main">
+      <!-- ═══ INICIO (tema claro) ═══ -->
+      <section id="inicio-view" class="screen hidden">
+        <div class="hero">
+          <div class="hero-kicker"><span></span><em>El tablón</em></div>
+          <h1 id="inicio-greeting">Bienvenido</h1>
+          <p id="inicio-subtitle">Aquí verás los avisos de dirección y las novedades del repertorio.</p>
+        </div>
+        <div id="avisos-list" class="avisos-list"></div>
+        <div class="repertoire-summary">
+          <h2>El repertorio</h2>
+          <span id="repertoire-count"></span>
+        </div>
+        <div id="repertoire-list" class="repertoire-list"></div>
+      </section>
 
-  <div class="search-row hidden" id="search-row">
-    <input type="search" id="search-input" class="search-input" placeholder="Buscar canción..." />
+      <!-- ═══ REPERTORIO (Libreto, solo lectura) ═══ -->
+      <section id="libreto-view" class="screen hidden"></section>
+
+      <!-- ═══ AUDIOS ═══ -->
+      <section id="audios-view" class="screen hidden">
+        <div class="audios-toolbar">
+          <button id="rehearsal-toggle" class="btn btn-primary">Modo ensayo</button>
+        </div>
+        <div id="audios-list"></div>
+      </section>
+
+      <!-- ═══ LETRA (letra + karaoke cuando hay audio) ═══ -->
+      <section id="letra-view" class="screen screen-letra hidden">
+        <div style="padding: var(--space-6) var(--space-6) 0;">
+          <button id="letra-back" class="btn btn-ghost">&larr; Volver</button>
+        </div>
+        <h2 id="letra-title" style="margin: var(--space-4) var(--space-6) 0; font-family: var(--font-display); font-weight: 500; font-size: 24px;"></h2>
+        <div class="letra-voice-row" id="letra-voice-row"></div>
+        <div class="letra-lines" id="letra-lines"></div>
+        <div class="letra-footnote hidden" id="letra-footnote"></div>
+      </section>
+
+      <!-- ═══ PANEL DEL DIRECTOR ═══ -->
+      <section id="director-view" class="screen panel-screen hidden">
+        <div class="topbar">
+          <button class="menu-btn director-menu-btn" aria-label="Menú"><span></span><span></span><span></span></button>
+          <div class="header-title">
+            <div class="header-kicker">Dirección</div>
+            <div class="header-name">El libreto</div>
+          </div>
+          <button class="btn btn-gold" style="min-height:36px;font-size:12px;">Nueva pieza</button>
+        </div>
+        <div class="panel-head">
+          <h1>Piezas del repertorio</h1>
+          <p>Sube la letra, sube el audio y avisa al coro desde la misma línea.</p>
+        </div>
+        <div id="director-pieces" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
+
+        <div class="section-label">
+          <span class="rule"></span>
+          <h2>Quieren entrar</h2>
+          <span class="count" id="director-requests-count">0</span>
+        </div>
+        <div id="director-requests" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
+      </section>
+
+      <!-- ═══ PANEL DE ADMINISTRACIÓN ═══ -->
+      <section id="admin-view" class="screen panel-screen hidden">
+        <div class="topbar">
+          <button class="menu-btn admin-menu-btn" aria-label="Menú"><span></span><span></span><span></span></button>
+          <div class="header-title">
+            <div class="header-kicker">Administración</div>
+            <div class="header-name">La agrupación</div>
+          </div>
+        </div>
+
+        <div class="admin-stats">
+          <div class="admin-stat"><span class="n gold" id="admin-stat-members">0</span><span class="l">componentes</span></div>
+          <div class="admin-stat"><span class="n" id="admin-stat-directors">0</span><span class="l">directores</span></div>
+          <div class="admin-stat"><span class="n" id="admin-stat-pending">0</span><span class="l">pendientes</span></div>
+        </div>
+
+        <div class="section-label"><span class="rule"></span><h2>Pendientes de tu firma</h2></div>
+        <div id="admin-requests" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
+
+        <div class="repertoire-summary"><h2>Componentes</h2><span>voz y rol</span></div>
+        <div id="admin-members" style="padding: 0 var(--space-6); display: flex; flex-direction: column;"></div>
+
+        <div class="panel-head"><h2 style="margin:0;font-family:var(--font-heading);font-weight:500;font-size:15px;">Quién tocó el libreto</h2></div>
+        <div id="admin-activity" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
+
+        <div class="panel-footer">
+          <button class="btn btn-primary">Nombrar director</button>
+          <button class="btn btn-ghost">Invitar a alguien</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="bottom-bars">
+      <div id="rehearsal-bar" class="rehearsal-bar hidden">
+        <div class="rehearsal-info">
+          <strong id="rehearsal-current-title">—</strong>
+          <span id="rehearsal-position"></span>
+        </div>
+        <label class="audio-type-select">
+          Voz:
+          <select id="audio-type"></select>
+        </label>
+        <label class="shuffle-toggle">
+          <input type="checkbox" id="shuffle-cuples" />
+          Barajar cuplés
+        </label>
+        <button id="rehearsal-close" class="btn btn-ghost">Cerrar</button>
+      </div>
+
+      <div id="player-bar" class="player-bar hidden">
+        <button id="player-prev" class="btn btn-icon" title="Anterior">⏮</button>
+        <button id="player-playpause" class="btn btn-icon" title="Reproducir/Pausar">▶</button>
+        <button id="player-next" class="btn btn-icon" title="Siguiente">⏭</button>
+        <button id="player-loop" class="btn btn-icon" title="Repetir canción">🔁</button>
+        <div class="player-track">
+          <div id="player-title">—</div>
+          <input type="range" id="player-seek" value="0" min="0" max="1000" step="1" />
+        </div>
+      </div>
+    </div>
+
+    <audio id="audio-el" preload="none"></audio>
   </div>
-
-  <main id="main">
-    <section id="inicio-view" class="tab-view">
-      <div class="hero">
-        <div class="hero-kicker"><span></span><em>El tablón</em></div>
-        <h1 id="inicio-greeting">Bienvenido</h1>
-        <p id="inicio-subtitle">Aquí verás los avisos del director y las novedades del repertorio.</p>
-      </div>
-      <div id="avisos-list" class="avisos-list"></div>
-      <div class="repertoire-summary">
-        <h2>El repertorio</h2>
-        <span id="repertoire-count"></span>
-      </div>
-      <div id="repertoire-list" class="repertoire-list"></div>
-    </section>
-
-    <section id="libreto-view" class="tab-view hidden"></section>
-
-    <section id="audios-view" class="tab-view hidden">
-      <div class="audios-toolbar">
-        <button id="rehearsal-toggle" class="btn btn-primary">Modo ensayo</button>
-      </div>
-      <div id="audios-list"></div>
-    </section>
-
-    <section id="song-detail" class="song-detail hidden">
-      <button id="back-btn" class="btn btn-ghost">&larr; Volver</button>
-      <span id="detail-kind" class="badge"></span>
-      <h2 id="detail-title"></h2>
-      <pre id="detail-letter" class="letter"></pre>
-    </section>
-  </main>
-
-  <div id="bottom-bars">
-    <div id="rehearsal-bar" class="rehearsal-bar hidden">
-      <div class="rehearsal-info">
-        <strong id="rehearsal-current-title">—</strong>
-        <span id="rehearsal-position"></span>
-      </div>
-      <label class="audio-type-select">
-        Voz:
-        <select id="audio-type"></select>
-      </label>
-      <label class="shuffle-toggle">
-        <input type="checkbox" id="shuffle-cuples" />
-        Barajar cuplés
-      </label>
-      <button id="rehearsal-close" class="btn btn-ghost">Cerrar</button>
-    </div>
-
-    <div id="player-bar" class="player-bar hidden">
-      <button id="player-prev" class="btn btn-icon" title="Anterior">⏮</button>
-      <button id="player-playpause" class="btn btn-icon" title="Reproducir/Pausar">▶</button>
-      <button id="player-next" class="btn btn-icon" title="Siguiente">⏭</button>
-      <button id="player-loop" class="btn btn-icon" title="Repetir canción">🔁</button>
-      <div class="player-track">
-        <div id="player-title">—</div>
-        <input type="range" id="player-seek" value="0" min="0" max="1000" step="1" />
-      </div>
-    </div>
-  </div>
-
-  <audio id="audio-el" preload="none"></audio>
 
   <script src="js/app.js"></script>
 </body>
