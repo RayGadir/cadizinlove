@@ -143,6 +143,7 @@ const el = {
   directorPieces: document.getElementById('director-pieces'),
   directorRequests: document.getElementById('director-requests'),
   directorRequestsCount: document.getElementById('director-requests-count'),
+  directorAvisosHistory: document.getElementById('director-avisos-history'),
 
   adminView: document.getElementById('admin-view'),
   adminStatMembers: document.getElementById('admin-stat-members'),
@@ -485,34 +486,57 @@ function formatAvisoDate(aviso) {
 // "notificacion" (avisa de una letra nueva/actualizada — lleva al
 // Repertorio al pulsarla) y "aviso" (un mensaje urgente suelto, no
 // navegable). No hay audios ni nada más aquí.
+const NOVEDADES_LIMIT = 2;
+
+function buildAvisoCard(aviso, { clickable = false } = {}) {
+  const isNotificacion = aviso.type === 'notificacion';
+  const card = document.createElement('article');
+  card.className = 'aviso-card' + (isNotificacion ? ' is-notificacion' : ' is-urgente');
+  card.innerHTML = `
+    <div class="aviso-card-top">
+      <span class="tag-pill">${AVISO_TYPE_LABELS[aviso.type] || ''}</span>
+      <time>${formatAvisoDate(aviso)}</time>
+    </div>
+    <h3 class="aviso-title">${aviso.title || ''}</h3>
+    <p class="aviso-body">${aviso.body || ''}</p>
+    ${aviso.authorName ? `<div class="aviso-signoff">${aviso.authorName}</div>` : ''}
+  `;
+  if (clickable && isNotificacion) {
+    card.classList.add('clickable');
+    card.addEventListener('click', () => goScreen('libreto'));
+  }
+  return card;
+}
+
+// Solo las dos últimas notificaciones/avisos se muestran en Novedades; al
+// publicar una nueva, la más antigua de las dos deja paso a la nueva (no se
+// borra: sigue en el histórico del Panel del director).
 function renderAvisos() {
   el.avisosList.innerHTML = '';
-  if (state.avisos.length === 0) {
+  const latest = state.avisos.slice(0, NOVEDADES_LIMIT);
+  if (latest.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.textContent = 'Todavía no hay avisos. Cuando la dirección publique alguno, aparecerá aquí.';
     el.avisosList.appendChild(empty);
     return;
   }
-  state.avisos.forEach((aviso) => {
-    const isNotificacion = aviso.type === 'notificacion';
-    const card = document.createElement('article');
-    card.className = 'aviso-card' + (isNotificacion ? ' is-notificacion' : ' is-urgente');
-    card.innerHTML = `
-      <div class="aviso-card-top">
-        <span class="tag-pill">${AVISO_TYPE_LABELS[aviso.type] || ''}</span>
-        <time>${formatAvisoDate(aviso)}</time>
-      </div>
-      <h3 class="aviso-title">${aviso.title || ''}</h3>
-      <p class="aviso-body">${aviso.body || ''}</p>
-      ${aviso.authorName ? `<div class="aviso-signoff">${aviso.authorName}</div>` : ''}
-    `;
-    if (isNotificacion) {
-      card.classList.add('clickable');
-      card.addEventListener('click', () => goScreen('libreto'));
-    }
-    el.avisosList.appendChild(card);
-  });
+  latest.forEach((aviso) => el.avisosList.appendChild(buildAvisoCard(aviso, { clickable: true })));
+}
+
+// Histórico completo (todas las notificaciones y avisos publicados, no solo
+// los dos últimos), visible en el Panel del director para poder consultarlos.
+function renderAvisoHistory() {
+  if (!el.directorAvisosHistory) return;
+  el.directorAvisosHistory.innerHTML = '';
+  if (state.avisos.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Todavía no se ha publicado ninguna notificación ni aviso.';
+    el.directorAvisosHistory.appendChild(empty);
+    return;
+  }
+  state.avisos.forEach((aviso) => el.directorAvisosHistory.appendChild(buildAvisoCard(aviso)));
 }
 
 function renderRepertoireSummary() {
@@ -730,6 +754,8 @@ function renderDirector() {
   } else {
     pending.forEach((m) => el.directorRequests.appendChild(buildRequestCard(m)));
   }
+
+  renderAvisoHistory();
 }
 
 function buildRequestCard(member) {
