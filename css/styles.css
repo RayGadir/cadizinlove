@@ -458,6 +458,21 @@ a:hover { color: var(--accent-200); }
 
 .empty-state { padding: 40px var(--space-6); text-align: center; color: var(--text-dim); font-size: 14px; }
 
+/* ── Repertorio (prueba: tema claro, como Inicio) ── */
+#libreto-view {
+  min-height: 100vh; padding-bottom: 104px; color: var(--neutral-900);
+  background: radial-gradient(120% 45% at 10% 0%, #ffffff 0%, var(--neutral-200) 62%);
+}
+#libreto-view .song-card {
+  background: #ffffff; color: var(--neutral-900); box-shadow: 0 0 0 1px var(--neutral-300);
+}
+#libreto-view .song-card:hover { box-shadow: 0 0 0 1px var(--neutral-400), 0 6px 18px rgba(41,43,49,0.1); }
+#libreto-view .song-card-kind {
+  color: color-mix(in srgb, var(--card-color, var(--accent)) 65%, black 35%);
+  border-color: color-mix(in srgb, var(--card-color, var(--accent)) 55%, black 10%);
+}
+#libreto-view .empty-state { color: var(--neutral-600); }
+
 .song-detail { padding: var(--space-4) var(--space-6) var(--space-8); }
 .badge {
   display: inline-block; background: transparent; color: var(--card-color, var(--accent));
