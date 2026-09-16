@@ -88,6 +88,11 @@ a:hover { color: var(--accent-200); }
   to   { opacity: 1; transform: none; }
 }
 
+.app-credit {
+  text-align: center; padding: var(--space-6) var(--space-6) calc(var(--space-6) + 12px);
+  font-size: 11px; letter-spacing: 0.04em; color: var(--neutral-500);
+}
+
 .app-frame {
   width: 100%;
   max-width: 440px;
