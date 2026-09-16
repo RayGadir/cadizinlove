@@ -8,7 +8,8 @@ rules_version = '2';
 // - Solo un director o administrador puede leer la lista completa de
 //   componentes, y solo un director o administrador puede modificar
 //   cualquier ficha (aprobar, rechazar, asignar voz, nombrar director).
-// - Nadie puede borrar fichas (se usa role: "rechazado" en vez de borrar).
+// - Un director o administrador puede eliminar una ficha (por ejemplo para
+//   quitar a alguien del coro); nadie puede borrar la suya propia.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -34,7 +35,7 @@ service cloud.firestore {
 
       allow update: if isDirectorOrAdmin();
 
-      allow delete: if false;
+      allow delete: if isDirectorOrAdmin() && request.auth.uid != memberId;
     }
 
     match /songs/{songId} {

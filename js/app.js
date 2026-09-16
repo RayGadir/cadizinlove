@@ -10,6 +10,8 @@ import {
   assignVoice,
   renameMember,
   promoteToDirector,
+  setMemberRole,
+  deleteMember,
   listSongs,
   createSong,
   updateSong,
@@ -53,6 +55,7 @@ const ROLE_META = {
   rechazado: { label: 'Rechazado', color: '#ff8a80', border: 'rgba(176,0,32,0.4)' },
 };
 const VOICE_OPTIONS = ['Tenor', 'Segunda', 'Bajo', 'Tercera'];
+const ROLE_OPTIONS = ['corista', 'director', 'admin'];
 
 function kindIndex(kind) {
   const i = KIND_ORDER.indexOf(kind);
@@ -144,13 +147,13 @@ const el = {
   directorRequests: document.getElementById('director-requests'),
   directorRequestsCount: document.getElementById('director-requests-count'),
   directorAvisosHistory: document.getElementById('director-avisos-history'),
+  directorMembers: document.getElementById('director-members'),
 
   adminView: document.getElementById('admin-view'),
   adminStatMembers: document.getElementById('admin-stat-members'),
   adminStatDirectors: document.getElementById('admin-stat-directors'),
   adminStatPending: document.getElementById('admin-stat-pending'),
   adminRequests: document.getElementById('admin-requests'),
-  adminMembers: document.getElementById('admin-members'),
   adminActivity: document.getElementById('admin-activity'),
   adminNombrarDirector: document.getElementById('admin-nombrar-director'),
 
@@ -756,6 +759,103 @@ function renderDirector() {
   }
 
   renderAvisoHistory();
+  renderDirectorMembers();
+}
+
+// Componentes del coro (antes vivía en Administración): nombre editable,
+// y un botón "Opciones" por fila que despliega asignar rol, asignar voz o
+// eliminar a la persona del coro.
+function renderDirectorMembers() {
+  if (!el.directorMembers) return;
+  el.directorMembers.innerHTML = '';
+  const roster = state.members.filter((m) => m.role !== 'rechazado' && m.role !== 'pendiente');
+  if (roster.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Todavía no hay componentes aprobados.';
+    el.directorMembers.appendChild(empty);
+    return;
+  }
+  roster.forEach((m) => el.directorMembers.appendChild(buildMemberRow(m)));
+}
+
+function buildMemberRow(m) {
+  const meta = ROLE_META[m.role] || ROLE_META.pendiente;
+  const wrap = document.createElement('div');
+  wrap.className = 'member-row-wrap';
+  wrap.innerHTML = `
+    <div class="member-row">
+      <span class="info">
+        <input type="text" class="name-input" value="${m.name || ''}" />
+        <span class="voice">${m.voice || 'Sin voz asignada'}</span>
+      </span>
+      <span class="role" style="color:${meta.color};border:1px solid ${meta.border};">${meta.label}</span>
+      <button type="button" class="btn btn-ghost member-options-toggle" style="min-height:32px;font-size:11px;">Opciones</button>
+    </div>
+    <div class="member-options-panel hidden">
+      <label class="field">
+        <span>Asignar rol</span>
+        <select class="role-select">
+          ${ROLE_OPTIONS.map((r) => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${ROLE_META[r].label}</option>`).join('')}
+        </select>
+      </label>
+      <label class="field">
+        <span>Asignar voz</span>
+        <select class="voice-select">
+          <option value="">Sin voz</option>
+          ${VOICE_OPTIONS.map((v) => `<option value="${v}" ${m.voice === v ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>
+      </label>
+      <button type="button" class="btn btn-ghost member-delete">Eliminar del coro</button>
+    </div>
+  `;
+
+  const panel = wrap.querySelector('.member-options-panel');
+  wrap.querySelector('.member-options-toggle').addEventListener('click', () => {
+    panel.classList.toggle('hidden');
+  });
+
+  wrap.querySelector('.role-select').addEventListener('change', async (e) => {
+    try {
+      await setMemberRole(m.id, e.target.value);
+      await refreshMembers();
+      render();
+    } catch (err) { /* deja el valor anterior si falla */ }
+  });
+
+  wrap.querySelector('.voice-select').addEventListener('change', async (e) => {
+    try {
+      await assignVoice(m.id, e.target.value || null);
+      await refreshMembers();
+      render();
+    } catch (err) { /* deja el valor anterior si falla */ }
+  });
+
+  wrap.querySelector('.member-delete').addEventListener('click', async () => {
+    if (!window.confirm(`¿Eliminar a «${m.name}» del coro? Perderá el acceso a la app.`)) return;
+    try {
+      await deleteMember(m.id);
+      await refreshMembers();
+      render();
+    } catch (err) {
+      window.alert('No se ha podido eliminar.');
+    }
+  });
+
+  const nameInput = wrap.querySelector('.name-input');
+  nameInput.addEventListener('change', async () => {
+    const name = nameInput.value.trim();
+    if (!name || name === m.name) { nameInput.value = m.name || ''; return; }
+    try {
+      await renameMember(m.id, name);
+      await refreshMembers();
+      render();
+    } catch (err) {
+      nameInput.value = m.name || '';
+    }
+  });
+
+  return wrap;
 }
 
 function buildRequestCard(member) {
@@ -1032,52 +1132,6 @@ function renderAdmin() {
     el.adminRequests.appendChild(empty);
   } else {
     pending.forEach((m) => el.adminRequests.appendChild(buildRequestCard(m)));
-  }
-
-  el.adminMembers.innerHTML = '';
-  const roster = state.members.filter((m) => m.role !== 'rechazado' && m.role !== 'pendiente');
-  if (roster.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.textContent = 'Todavía no hay componentes aprobados.';
-    el.adminMembers.appendChild(empty);
-  } else {
-    roster.forEach((m) => {
-      const meta = ROLE_META[m.role] || ROLE_META.pendiente;
-      const row = document.createElement('div');
-      row.className = 'member-row';
-      row.innerHTML = `
-        <span class="info">
-          <input type="text" class="name-input" value="${m.name || ''}" />
-          <span class="voice">${m.voice || 'Sin voz asignada'}</span>
-        </span>
-        <select class="voice-select">
-          <option value="">Sin voz</option>
-          ${VOICE_OPTIONS.map((v) => `<option value="${v}" ${m.voice === v ? 'selected' : ''}>${v}</option>`).join('')}
-        </select>
-        <span class="role" style="color:${meta.color};border:1px solid ${meta.border};">${meta.label}</span>
-      `;
-      row.querySelector('.voice-select').addEventListener('change', async (e) => {
-        try {
-          await assignVoice(m.id, e.target.value || null);
-          await refreshMembers();
-          render();
-        } catch (err) { /* deja el valor anterior si falla */ }
-      });
-      const nameInput = row.querySelector('.name-input');
-      nameInput.addEventListener('change', async () => {
-        const name = nameInput.value.trim();
-        if (!name || name === m.name) { nameInput.value = m.name || ''; return; }
-        try {
-          await renameMember(m.id, name);
-          await refreshMembers();
-          render();
-        } catch (err) {
-          nameInput.value = m.name || '';
-        }
-      });
-      el.adminMembers.appendChild(row);
-    });
   }
 
   el.adminActivity.innerHTML = '';

@@ -123,6 +123,14 @@ export function promoteToDirector(uid) {
   return setMemberFields(uid, { role: 'director' });
 }
 
+export function setMemberRole(uid, role) {
+  return setMemberFields(uid, { role });
+}
+
+export function deleteMember(uid) {
+  return deleteDoc(doc(db, MEMBERS_COLLECTION, uid));
+}
+
 /* ══════════════════════════ Repertorio (letras y audios) ══════════════════════════ */
 // Solo puede escribir aquí un director/administrador — lo hacen cumplir las
 // reglas de Firestore y de Storage, no este código.

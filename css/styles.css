@@ -516,11 +516,12 @@ a:hover { color: var(--accent-200); }
 .panel-screen .request-card .reject:hover { border-color: var(--neutral-500); color: var(--neutral-800); }
 .panel-screen .admin-stat .n.gold { color: var(--gold-on-light-2); }
 .panel-screen .admin-stat .l { color: var(--neutral-600); }
-.panel-screen .member-row { border-bottom-color: var(--neutral-200); }
+.panel-screen .member-row-wrap { border-bottom-color: var(--neutral-200); }
 .panel-screen .member-row .info .name-input { color: var(--neutral-900); }
 .panel-screen .member-row .info .name-input:hover,
 .panel-screen .member-row .info .name-input:focus { background: #ffffff; border-color: var(--neutral-300); }
-.panel-screen .member-row .voice-select { background: #ffffff; color: var(--neutral-900); border-color: var(--neutral-300); }
+.panel-screen .member-options-panel .role-select,
+.panel-screen .member-options-panel .voice-select { background: #ffffff; color: var(--neutral-900); border-color: var(--neutral-300); }
 .panel-screen .piece-song-row { border-top-color: var(--neutral-200); }
 .panel-screen .piece-song-row .audio-chip { color: var(--neutral-600); border-color: var(--neutral-300); }
 .panel-screen .activity-row .what { color: var(--neutral-700); }
@@ -643,6 +644,19 @@ a:hover { color: var(--accent-200); }
   background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
   border-radius: 6px; padding: 4px 6px; font-family: var(--font-body); font-size: 12px; flex: none;
 }
+
+.member-row-wrap { border-bottom: 1px solid var(--border); }
+.member-row-wrap .member-row { border-bottom: none; }
+.member-options-panel {
+  padding: 0 0 var(--space-4); display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-4);
+}
+.member-options-panel .field { gap: 4px; min-width: 130px; flex: 1; }
+.member-options-panel .role-select, .member-options-panel .voice-select {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; font-family: var(--font-body); font-size: 13px; width: 100%;
+}
+.member-options-panel .member-delete { color: #ff8a80; border-color: rgba(176,0,32,0.4); flex: none; }
+.member-options-panel .member-delete:hover { background: rgba(176,0,32,0.12); }
 
 .auth-error {
   font-size: 13px; line-height: 1.5; color: #ff8a80;
