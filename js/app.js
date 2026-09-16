@@ -743,10 +743,23 @@ function buildDirectorSongRow(song) {
   const chips = row.querySelector('.audio-chips');
   Object.keys(AUDIO_TYPE_LABELS).forEach((type) => {
     const has = (song.audios || []).some((a) => a.type === type);
+    const wrap = document.createElement('span');
+    wrap.className = 'audio-chip-wrap';
+
+    if (has) {
+      const playBtn = document.createElement('button');
+      playBtn.type = 'button';
+      playBtn.className = 'audio-play-btn';
+      playBtn.title = `Escuchar audio de ${audioTypeLabel(type)}`;
+      playBtn.textContent = '▶';
+      playBtn.addEventListener('click', () => playSongAudio(song, type));
+      wrap.appendChild(playBtn);
+    }
+
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'audio-chip' + (has ? ' has-audio' : '');
-    chip.textContent = audioTypeLabel(type) + (has ? ' ✓' : '');
+    chip.textContent = has ? `${audioTypeLabel(type)} ✓` : `Subir ${audioTypeLabel(type)}`;
     chip.title = has ? `Sustituir audio de ${audioTypeLabel(type)}` : `Subir audio de ${audioTypeLabel(type)}`;
 
     const fileInput = document.createElement('input');
@@ -757,19 +770,23 @@ function buildDirectorSongRow(song) {
       const file = fileInput.files[0];
       if (!file) return;
       chip.disabled = true;
+      chip.textContent = 'Subiendo…';
       try {
         await uploadSongAudio(song, type, file);
         await refreshSongs();
         render();
       } catch (err) {
-        window.alert('No se ha podido subir el audio.');
+        console.error(err);
+        window.alert(`No se ha podido subir el audio (${err.code || err.message || 'error desconocido'}).`);
         chip.disabled = false;
+        chip.textContent = has ? `${audioTypeLabel(type)} ✓` : `Subir ${audioTypeLabel(type)}`;
       }
     });
 
     chip.addEventListener('click', () => fileInput.click());
-    chips.appendChild(chip);
-    chips.appendChild(fileInput);
+    wrap.appendChild(chip);
+    wrap.appendChild(fileInput);
+    chips.appendChild(wrap);
   });
 
   row.querySelector('.edit').addEventListener('click', () => openSongModal(song));
@@ -992,6 +1009,25 @@ function getPlayableSongs() {
   return state.songs
     .filter((s) => (s.audios || []).length > 0 && matchesSearch(s, query))
     .sort(compareSongs);
+}
+
+// Reproduce el audio de un tipo de voz concreto de una canción (se usa desde
+// el Panel del director, al pulsar ▶ junto a un audio ya subido) en el mismo
+// reproductor compartido de la parte de abajo de la app.
+function playSongAudio(song, type) {
+  const url = getAudioUrl(song, type);
+  if (!url) return;
+  state.rehearsalMode = false;
+  state.playlist = [song];
+  state.playlistIndex = 0;
+  state.audioType = type;
+  state.currentSongId = song.id;
+  el.playerBar.classList.remove('hidden');
+  el.playerTitle.textContent = `${song.title} · ${audioTypeLabel(type)}`;
+  el.audioEl.src = url;
+  el.audioEl.loop = state.loopEnabled;
+  el.audioEl.play();
+  syncBottomPadding();
 }
 
 function playSingleSong(song) {
