@@ -18,10 +18,19 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
+  addDoc,
   collection,
   getDocs,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAvoo_3ssFHm1gtYlaKioiawb6SWIkJ3fs',
@@ -36,8 +45,10 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
 export const db = getFirestore(firebaseApp);
+export const storage = getStorage(firebaseApp);
 
 const MEMBERS_COLLECTION = 'members';
+const SONGS_COLLECTION = 'songs';
 
 export function watchAuthState(callback) {
   return onAuthStateChanged(auth, callback);
@@ -106,4 +117,54 @@ export function assignVoice(uid, voice) {
 
 export function promoteToDirector(uid) {
   return setMemberFields(uid, { role: 'director' });
+}
+
+/* ══════════════════════════ Repertorio (letras y audios) ══════════════════════════ */
+// Solo puede escribir aquí un director/administrador — lo hacen cumplir las
+// reglas de Firestore y de Storage, no este código.
+
+export async function listSongs() {
+  const snap = await getDocs(collection(db, SONGS_COLLECTION));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function createSong({ title, kind, letter }) {
+  const docRef = await addDoc(collection(db, SONGS_COLLECTION), {
+    title,
+    kind,
+    letter: letter || '',
+    audios: [],
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+export function updateSong(id, fields) {
+  return updateDoc(doc(db, SONGS_COLLECTION, id), fields);
+}
+
+export async function deleteSong(song) {
+  await Promise.all(
+    (song.audios || []).map((a) => (a.path ? deleteObject(ref(storage, a.path)).catch(() => {}) : null))
+  );
+  await deleteDoc(doc(db, SONGS_COLLECTION, song.id));
+}
+
+// Sube el audio a Storage y actualiza la lista de audios de la canción,
+// sustituyendo el que hubiera para ese mismo tipo de voz si ya existía.
+export async function uploadSongAudio(song, type, file) {
+  const path = `songs/${song.id}/${type}-${Date.now()}-${file.name}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(storageRef);
+
+  const previous = (song.audios || []).find((a) => a.type === type);
+  const audios = (song.audios || []).filter((a) => a.type !== type);
+  audios.push({ type, url, path });
+  await updateSong(song.id, { audios });
+
+  if (previous?.path) {
+    deleteObject(ref(storage, previous.path)).catch(() => {});
+  }
+  return audios;
 }

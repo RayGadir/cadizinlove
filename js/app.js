@@ -9,6 +9,11 @@ import {
   rejectMember,
   assignVoice,
   promoteToDirector,
+  listSongs,
+  createSong,
+  updateSong,
+  deleteSong,
+  uploadSongAudio,
 } from './firebase.js';
 
 // Repertorio de un coro de Carnaval de Cádiz. Los cuplés y los estribillos se
@@ -145,6 +150,15 @@ const el = {
   adminActivity: document.getElementById('admin-activity'),
   adminNombrarDirector: document.getElementById('admin-nombrar-director'),
 
+  songModalBackdrop: document.getElementById('song-modal-backdrop'),
+  songModal: document.getElementById('song-modal'),
+  songModalTitle: document.getElementById('song-modal-title'),
+  songFormTitle: document.getElementById('song-form-title'),
+  songFormLetter: document.getElementById('song-form-letter'),
+  songFormError: document.getElementById('song-form-error'),
+  songModalCancel: document.getElementById('song-modal-cancel'),
+  songModalSave: document.getElementById('song-modal-save'),
+
   rehearsalToggle: document.getElementById('rehearsal-toggle'),
   rehearsalBar: document.getElementById('rehearsal-bar'),
   rehearsalClose: document.getElementById('rehearsal-close'),
@@ -207,9 +221,11 @@ async function handleAuthChange(user) {
   }
 
   applyMemberChrome(member);
+  const tasks = [refreshSongs()];
   if (member.role === 'director' || member.role === 'admin') {
-    await refreshMembers();
+    tasks.push(refreshMembers());
   }
+  await Promise.all(tasks);
   render();
   goScreen('inicio');
 }
@@ -281,18 +297,7 @@ function getAudioUrl(song, type) {
 }
 
 async function loadData() {
-  const [songsRes, avisosRes] = await Promise.all([
-    fetch('data/songs.json'),
-    fetch('data/avisos.json'),
-  ]);
-  const data = await songsRes.json();
-  el.groupName.textContent = data.group?.name || 'Cádiz in Love';
-  state.songs = data.songs || [];
-  state.avisos = await avisosRes.json();
-
-  const typesPresent = new Set();
-  state.songs.forEach((song) => (song.audios || []).forEach((a) => typesPresent.add(a.type)));
-  [...typesPresent].forEach((type) => {
+  Object.keys(AUDIO_TYPE_LABELS).forEach((type) => {
     const opt = document.createElement('option');
     opt.value = type;
     opt.textContent = audioTypeLabel(type);
@@ -300,7 +305,16 @@ async function loadData() {
   });
   state.audioType = el.audioTypeSelect.value || 'grupo';
 
-  render();
+  const avisosRes = await fetch('data/avisos.json');
+  state.avisos = await avisosRes.json();
+}
+
+async function refreshSongs() {
+  try {
+    state.songs = await listSongs();
+  } catch (err) {
+    state.songs = [];
+  }
 }
 
 function render() {
@@ -643,24 +657,24 @@ el.letraBack.addEventListener('click', () => goScreen('libreto'));
 function renderDirector() {
   el.directorPieces.innerHTML = '';
   SECTIONS.forEach((section, i) => {
-    const items = state.songs.filter((s) => section.kinds.includes(s.kind));
-    const hasAny = items.length > 0;
+    const items = state.songs.filter((s) => section.kinds.includes(s.kind)).sort(compareSongs);
     const hasAudio = items.some((s) => (s.audios || []).length > 0);
     const card = document.createElement('div');
-    card.className = 'piece-card' + (hasAny ? '' : ' is-empty');
+    card.className = 'piece-card' + (items.length ? '' : ' is-empty');
     card.innerHTML = `
       <div class="piece-card-top">
         <span class="num">${String(i + 1).padStart(2, '0')}</span>
         <span class="name">${section.title.replace(' (con Estribillo)', '')}</span>
-        <span class="status">${hasAny ? (hasAudio ? 'Letra y audio' : 'Solo letra') : 'Sin letra'}</span>
+        <span class="status">${items.length ? (hasAudio ? 'Letra y audio' : 'Solo letra') : 'Sin letra'}</span>
       </div>
       <div class="piece-card-actions">
-        <button class="btn btn-gold" style="min-height:38px;font-size:12px;">${hasAny ? 'Editar letra' : 'Escribir letra'}</button>
-        <button class="btn btn-ghost" style="min-height:38px;font-size:12px;">Subir audio</button>
-        ${hasAny ? '<button class="btn btn-ghost" style="min-height:38px;font-size:12px;">Avisar del cambio</button>' : ''}
+        <button class="btn btn-gold add-song" style="min-height:38px;font-size:12px;">Añadir canción</button>
       </div>
-      ${hasAny ? `<div class="piece-card-meta">${items.length} pieza${items.length === 1 ? '' : 's'} escrita${items.length === 1 ? '' : 's'}</div>` : ''}
+      <div class="piece-song-list"></div>
     `;
+    card.querySelector('.add-song').addEventListener('click', () => openSongModal({ kind: section.kinds[0] }));
+    const list = card.querySelector('.piece-song-list');
+    items.forEach((song) => list.appendChild(buildDirectorSongRow(song)));
     el.directorPieces.appendChild(card);
   });
 
@@ -714,6 +728,111 @@ function buildRequestCard(member) {
   });
   return card;
 }
+
+function buildDirectorSongRow(song) {
+  const row = document.createElement('div');
+  row.className = 'piece-song-row';
+  row.innerHTML = `
+    <span class="title">${song.title}</span>
+    <div class="audio-chips"></div>
+    <button class="btn btn-ghost edit" style="min-height:32px;font-size:11px;">Editar letra</button>
+    <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
+  `;
+
+  const chips = row.querySelector('.audio-chips');
+  Object.keys(AUDIO_TYPE_LABELS).forEach((type) => {
+    const has = (song.audios || []).some((a) => a.type === type);
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'audio-chip' + (has ? ' has-audio' : '');
+    chip.textContent = audioTypeLabel(type) + (has ? ' ✓' : '');
+    chip.title = has ? `Sustituir audio de ${audioTypeLabel(type)}` : `Subir audio de ${audioTypeLabel(type)}`;
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'audio/*';
+    fileInput.className = 'audio-file-input';
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      chip.disabled = true;
+      try {
+        await uploadSongAudio(song, type, file);
+        await refreshSongs();
+        render();
+      } catch (err) {
+        window.alert('No se ha podido subir el audio.');
+        chip.disabled = false;
+      }
+    });
+
+    chip.addEventListener('click', () => fileInput.click());
+    chips.appendChild(chip);
+    chips.appendChild(fileInput);
+  });
+
+  row.querySelector('.edit').addEventListener('click', () => openSongModal(song));
+  row.querySelector('.delete').addEventListener('click', async () => {
+    if (!window.confirm(`¿Eliminar «${song.title}» y sus audios?`)) return;
+    try {
+      await deleteSong(song);
+      await refreshSongs();
+      render();
+    } catch (err) {
+      window.alert('No se ha podido eliminar.');
+    }
+  });
+  return row;
+}
+
+/* ══════════════════════════ Modal: escribir/editar letra ══════════════════════════ */
+
+let editingSong = null;
+
+function openSongModal(song) {
+  editingSong = song;
+  el.songModalTitle.textContent = song.id ? 'Editar letra' : 'Nueva canción';
+  el.songFormTitle.value = song.title || '';
+  el.songFormLetter.value = song.letter || '';
+  el.songFormError.classList.add('hidden');
+  el.songModalBackdrop.classList.remove('hidden');
+  el.songModal.classList.remove('hidden');
+}
+
+function closeSongModal() {
+  el.songModalBackdrop.classList.add('hidden');
+  el.songModal.classList.add('hidden');
+  editingSong = null;
+}
+
+el.songModalCancel.addEventListener('click', closeSongModal);
+el.songModalBackdrop.addEventListener('click', closeSongModal);
+
+el.songModalSave.addEventListener('click', async () => {
+  const title = el.songFormTitle.value.trim();
+  const letter = el.songFormLetter.value;
+  if (!title) {
+    el.songFormError.textContent = 'Ponle un título a la canción.';
+    el.songFormError.classList.remove('hidden');
+    return;
+  }
+  el.songModalSave.disabled = true;
+  try {
+    if (editingSong.id) {
+      await updateSong(editingSong.id, { title, letter });
+    } else {
+      await createSong({ title, kind: editingSong.kind, letter });
+    }
+    await refreshSongs();
+    render();
+    closeSongModal();
+  } catch (err) {
+    el.songFormError.textContent = 'No se ha podido guardar. Inténtalo de nuevo.';
+    el.songFormError.classList.remove('hidden');
+  } finally {
+    el.songModalSave.disabled = false;
+  }
+});
 
 /* ══════════════════════════ Panel de Administración ══════════════════════════ */
 

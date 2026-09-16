@@ -163,10 +163,8 @@
         <button class="drawer-item" data-screen="libreto"><span class="stripe"></span>Repertorio</button>
         <button class="drawer-item" data-screen="audios"><span class="stripe"></span>Audios</button>
         <button class="drawer-item" data-screen="" disabled><span class="stripe"></span><span class="fill">Mi voz</span><span class="meta" id="drawer-my-voice">Sin asignar</span></button>
-        <button class="drawer-item" data-screen="" disabled><span class="stripe"></span>Perfil del coro</button>
         <button class="drawer-item hidden" data-screen="director" id="drawer-director-item"><span class="stripe"></span>Panel del director</button>
         <button class="drawer-item hidden" data-screen="admin" id="drawer-admin-item"><span class="stripe"></span><span class="fill">Administración</span><span class="count hidden" id="drawer-admin-count"></span></button>
-        <button class="drawer-item" data-screen="" disabled><span class="stripe"></span>Ajustes</button>
       </div>
       <button id="drawer-logout" class="drawer-logout">Salir</button>
     </nav>
@@ -221,7 +219,6 @@
             <div class="header-kicker">Dirección</div>
             <div class="header-name">El libreto</div>
           </div>
-          <button class="btn btn-gold" style="min-height:36px;font-size:12px;">Nueva pieza</button>
         </div>
         <div class="panel-head">
           <h1>Piezas del repertorio</h1>
@@ -299,6 +296,25 @@
     </div>
 
     <audio id="audio-el" preload="none"></audio>
+
+    <!-- ═══ Modal: escribir/editar letra ═══ -->
+    <div class="drawer-backdrop hidden" id="song-modal-backdrop"></div>
+    <div class="song-modal hidden" id="song-modal">
+      <h2 id="song-modal-title">Nueva canción</h2>
+      <label class="field">
+        <span>Título</span>
+        <input type="text" id="song-form-title" placeholder="Título de la canción" />
+      </label>
+      <label class="field">
+        <span>Letra</span>
+        <textarea id="song-form-letter" rows="10" placeholder="Pega o escribe la letra aquí. Una línea en blanco marca un salto de estrofa."></textarea>
+      </label>
+      <div class="auth-error hidden" id="song-form-error"></div>
+      <div class="song-modal-actions">
+        <button class="btn btn-ghost" id="song-modal-cancel">Cancelar</button>
+        <button class="btn btn-gold" id="song-modal-save">Guardar</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="js/app.js"></script>
