@@ -473,6 +473,53 @@ a:hover { color: var(--accent-200); }
 }
 #libreto-view .empty-state { color: var(--neutral-600); }
 
+/* ── Audios, Director, Administración (mismo tema claro que Inicio/Repertorio) ── */
+#audios-view, .panel-screen {
+  min-height: 100vh; padding-bottom: 104px; color: var(--neutral-900);
+  background: radial-gradient(120% 45% at 10% 0%, #ffffff 0%, var(--neutral-200) 62%);
+}
+
+#audios-view .song-card, .panel-screen .song-card {
+  background: #ffffff; color: var(--neutral-900); box-shadow: 0 0 0 1px var(--neutral-300);
+}
+#audios-view .song-card:hover { box-shadow: 0 0 0 1px var(--neutral-400), 0 6px 18px rgba(41,43,49,0.1); }
+#audios-view .song-card-kind, .panel-screen .song-card-kind {
+  color: color-mix(in srgb, var(--card-color, var(--accent)) 65%, black 35%);
+  border-color: color-mix(in srgb, var(--card-color, var(--accent)) 55%, black 10%);
+}
+#audios-view .song-card-no-audio { color: var(--neutral-600); border-color: var(--neutral-300); }
+#audios-view .song-card-play { color: var(--accent-700); border-color: var(--accent-600); }
+#audios-view .empty-state { color: var(--neutral-600); }
+
+/* Botones: las variantes existentes están pensadas para fondo oscuro
+   (colores muy claros) — aquí se oscurecen para que se lean sobre blanco. */
+#audios-view .btn-primary, .panel-screen .btn-primary { color: var(--accent-700); border-color: var(--accent-600); }
+#audios-view .btn-primary:hover, .panel-screen .btn-primary:hover { background: var(--accent-200); }
+#audios-view .btn-ghost, .panel-screen .btn-ghost { color: var(--neutral-600); border-color: var(--neutral-300); }
+#audios-view .btn-ghost:hover, .panel-screen .btn-ghost:hover { border-color: var(--neutral-500); color: var(--neutral-800); }
+.panel-screen .btn-gold { color: var(--gold-on-light-2); border-color: var(--gold); }
+.panel-screen .btn-gold:hover { background: color-mix(in srgb, var(--gold) 14%, transparent); }
+
+.panel-screen .panel-head p { color: var(--neutral-600); }
+.panel-screen .piece-card { background: #ffffff; box-shadow: 0 0 0 1px var(--neutral-300); }
+.panel-screen .piece-card.is-empty { box-shadow: 0 0 0 1px var(--neutral-300); }
+.panel-screen .piece-card-top .status { color: var(--gold-on-light-2); }
+.panel-screen .section-label .count { color: var(--gold-on-light-2); border-color: rgba(138,106,32,0.4); }
+.panel-screen .request-card { background: #ffffff; box-shadow: 0 0 0 1px var(--neutral-300); }
+.panel-screen .request-card .reject { border-color: var(--neutral-300); color: var(--neutral-600); }
+.panel-screen .request-card .reject:hover { border-color: var(--neutral-500); color: var(--neutral-800); }
+.panel-screen .admin-stat .n.gold { color: var(--gold-on-light-2); }
+.panel-screen .admin-stat .l { color: var(--neutral-600); }
+.panel-screen .member-row { border-bottom-color: var(--neutral-200); }
+.panel-screen .member-row .info .name-input { color: var(--neutral-900); }
+.panel-screen .member-row .info .name-input:hover,
+.panel-screen .member-row .info .name-input:focus { background: #ffffff; border-color: var(--neutral-300); }
+.panel-screen .member-row .voice-select { background: #ffffff; color: var(--neutral-900); border-color: var(--neutral-300); }
+.panel-screen .piece-song-row { border-top-color: var(--neutral-200); }
+.panel-screen .piece-song-row .audio-chip { color: var(--neutral-600); border-color: var(--neutral-300); }
+.panel-screen .activity-row .what { color: var(--neutral-700); }
+.panel-screen .panel-footer { border-top-color: var(--neutral-200); }
+
 .song-detail { padding: var(--space-4) var(--space-6) var(--space-8); }
 .badge {
   display: inline-block; background: transparent; color: var(--card-color, var(--accent));
@@ -530,7 +577,7 @@ a:hover { color: var(--accent-200); }
 
 /* ── Paneles Director / Administración ── */
 
-.panel-screen { min-height: 100vh; padding-bottom: var(--space-8); background: var(--color-bg); }
+.panel-screen { min-height: 100vh; padding-bottom: var(--space-8); }
 .panel-head { padding: var(--space-8) var(--space-6) var(--space-4); }
 .panel-head h1 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 28px; line-height: 1.1; }
 .panel-head p { margin: var(--space-3) 0 0; font-size: 13px; line-height: 1.55; color: var(--neutral-400); max-width: 34ch; }
