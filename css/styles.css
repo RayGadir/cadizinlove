@@ -207,7 +207,7 @@ a:hover { color: var(--accent-200); }
   position: fixed; top: 0; left: 0; bottom: 0; z-index: 31;
   width: 292px; max-width: 82%; overflow-y: auto;
   padding: var(--space-8) var(--space-6);
-  background: linear-gradient(180deg, #2a1420 0%, #1d1a2c 34%, var(--color-bg) 100%);
+  background: linear-gradient(180deg, #7b1a26 0%, #4d0f1a 32%, #2a0d1c 62%, var(--color-bg) 100%);
   box-shadow: 1px 0 0 rgba(200,165,91,0.22), 18px 0 48px rgba(0,0,0,0.5);
   display: flex; flex-direction: column; gap: var(--space-8);
 }
