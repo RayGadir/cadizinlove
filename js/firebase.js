@@ -115,6 +115,10 @@ export function assignVoice(uid, voice) {
   return setMemberFields(uid, { voice });
 }
 
+export function renameMember(uid, name) {
+  return setMemberFields(uid, { name });
+}
+
 export function promoteToDirector(uid) {
   return setMemberFields(uid, { role: 'director' });
 }

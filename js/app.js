@@ -8,6 +8,7 @@ import {
   approveMember,
   rejectMember,
   assignVoice,
+  renameMember,
   promoteToDirector,
   listSongs,
   createSong,
@@ -112,7 +113,6 @@ const el = {
   drawerNav: document.getElementById('drawer-nav'),
   drawerLogout: document.getElementById('drawer-logout'),
   drawerAdminCount: document.getElementById('drawer-admin-count'),
-  drawerMyVoice: document.getElementById('drawer-my-voice'),
   drawerDirectorItem: document.getElementById('drawer-director-item'),
   drawerAdminItem: document.getElementById('drawer-admin-item'),
 
@@ -194,7 +194,6 @@ function applyMemberChrome(member) {
   el.adminAvatar.title = member.name || '';
   el.drawerSub.textContent = (ROLE_META[member.role] || ROLE_META.pendiente).label;
   el.inicioGreeting.textContent = member.name ? `Bienvenido, ${member.name}` : 'Bienvenido';
-  el.drawerMyVoice.textContent = member.voice || 'Sin asignar';
   el.drawerDirectorItem.classList.toggle('hidden', member.role !== 'director' && member.role !== 'admin');
   el.drawerAdminItem.classList.toggle('hidden', member.role !== 'admin');
 }
@@ -871,7 +870,7 @@ function renderAdmin() {
       row.className = 'member-row';
       row.innerHTML = `
         <span class="info">
-          <span class="name">${m.name}</span>
+          <input type="text" class="name-input" value="${m.name || ''}" />
           <span class="voice">${m.voice || 'Sin voz asignada'}</span>
         </span>
         <select class="voice-select">
@@ -886,6 +885,18 @@ function renderAdmin() {
           await refreshMembers();
           render();
         } catch (err) { /* deja el valor anterior si falla */ }
+      });
+      const nameInput = row.querySelector('.name-input');
+      nameInput.addEventListener('change', async () => {
+        const name = nameInput.value.trim();
+        if (!name || name === m.name) { nameInput.value = m.name || ''; return; }
+        try {
+          await renameMember(m.id, name);
+          await refreshMembers();
+          render();
+        } catch (err) {
+          nameInput.value = m.name || '';
+        }
       });
       el.adminMembers.appendChild(row);
     });
