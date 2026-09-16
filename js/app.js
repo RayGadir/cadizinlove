@@ -154,6 +154,8 @@ const el = {
   songModal: document.getElementById('song-modal'),
   songModalTitle: document.getElementById('song-modal-title'),
   songFormTitle: document.getElementById('song-form-title'),
+  songFormFile: document.getElementById('song-form-file'),
+  songFileError: document.getElementById('song-file-error'),
   songFormLetter: document.getElementById('song-form-letter'),
   songFormError: document.getElementById('song-form-error'),
   songModalCancel: document.getElementById('song-modal-cancel'),
@@ -794,9 +796,55 @@ function openSongModal(song) {
   el.songFormTitle.value = song.title || '';
   el.songFormLetter.value = song.letter || '';
   el.songFormError.classList.add('hidden');
+  el.songFileError.classList.add('hidden');
+  el.songFormFile.value = '';
   el.songModalBackdrop.classList.remove('hidden');
   el.songModal.classList.remove('hidden');
 }
+
+// Extrae el texto de un .docx (con mammoth.js) o un .pdf (con pdf.js) para
+// no obligar a la dirección a copiar y pegar la letra a mano. El .doc
+// antiguo (binario, no .docx) no se puede leer en el navegador — hay que
+// guardarlo como .docx primero o pasarlo a mano.
+async function extractTextFromFile(file) {
+  const name = file.name.toLowerCase();
+  const arrayBuffer = await file.arrayBuffer();
+
+  if (name.endsWith('.docx')) {
+    const result = await window.mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  }
+
+  if (name.endsWith('.pdf')) {
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map((item) => item.str).join(' ') + '\n\n';
+    }
+    return text;
+  }
+
+  throw new Error('unsupported-format');
+}
+
+el.songFormFile.addEventListener('change', async () => {
+  const file = el.songFormFile.files[0];
+  if (!file) return;
+  el.songFileError.classList.add('hidden');
+  try {
+    const text = (await extractTextFromFile(file)).trim();
+    el.songFormLetter.value = text;
+  } catch (err) {
+    el.songFileError.textContent = err.message === 'unsupported-format'
+      ? 'Solo se puede leer .docx o .pdf. Si es un .doc antiguo, guárdalo como .docx desde Word y vuelve a intentarlo.'
+      : 'No se ha podido leer el archivo. Revisa que no esté dañado.';
+    el.songFileError.classList.remove('hidden');
+  } finally {
+    el.songFormFile.value = '';
+  }
+});
 
 function closeSongModal() {
   el.songModalBackdrop.classList.add('hidden');
@@ -826,6 +874,7 @@ el.songModalSave.addEventListener('click', async () => {
     render();
     closeSongModal();
   } catch (err) {
+    console.error(err);
     el.songFormError.textContent = 'No se ha podido guardar. Inténtalo de nuevo.';
     el.songFormError.classList.remove('hidden');
   } finally {
