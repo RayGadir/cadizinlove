@@ -98,16 +98,13 @@ export function setMemberFields(uid, fields) {
   return updateDoc(doc(db, MEMBERS_COLLECTION, uid), fields);
 }
 
-// Aprobar: marca la firma de quien aprueba: si con esta ya están las dos
-// (director + administrador), el rol pasa de "pendiente" a "corista" en la
-// misma escritura.
+// Aprobar: con la firma de un director O del administrador ya basta — no
+// hace falta esperar a la otra (antes se pedían las dos, pero eso dejaba a
+// todo el mundo bloqueado en "pendiente" si aún no había ningún director
+// nombrado, ya que nadie podía firmar la segunda).
 export async function approveMember(member, approverRole) {
   const field = approverRole === 'director' ? 'approvedByDirector' : 'approvedByAdmin';
-  const otherField = approverRole === 'director' ? 'approvedByAdmin' : 'approvedByDirector';
-  const bothApproved = member[otherField] === true;
-  const fields = { [field]: true };
-  if (bothApproved) fields.role = 'corista';
-  await setMemberFields(member.id, fields);
+  await setMemberFields(member.id, { [field]: true, role: 'corista' });
 }
 
 export function rejectMember(uid) {
