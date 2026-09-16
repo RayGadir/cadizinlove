@@ -740,54 +740,56 @@ function buildDirectorSongRow(song) {
     <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
   `;
 
+  // Por ahora solo se sube un audio por canción (el de grupo). Cuando haga
+  // falta, se puede volver a ofrecer un audio por voz (tenor, segunda...):
+  // uploadSongAudio() y AUDIO_TYPE_LABELS ya están listos para eso.
+  const type = 'grupo';
   const chips = row.querySelector('.audio-chips');
-  Object.keys(AUDIO_TYPE_LABELS).forEach((type) => {
-    const has = (song.audios || []).some((a) => a.type === type);
-    const wrap = document.createElement('span');
-    wrap.className = 'audio-chip-wrap';
+  const has = (song.audios || []).some((a) => a.type === type);
+  const wrap = document.createElement('span');
+  wrap.className = 'audio-chip-wrap';
 
-    if (has) {
-      const playBtn = document.createElement('button');
-      playBtn.type = 'button';
-      playBtn.className = 'audio-play-btn';
-      playBtn.title = `Escuchar audio de ${audioTypeLabel(type)}`;
-      playBtn.textContent = '▶';
-      playBtn.addEventListener('click', () => playSongAudio(song, type));
-      wrap.appendChild(playBtn);
+  if (has) {
+    const playBtn = document.createElement('button');
+    playBtn.type = 'button';
+    playBtn.className = 'audio-play-btn';
+    playBtn.title = 'Escuchar audio';
+    playBtn.textContent = '▶';
+    playBtn.addEventListener('click', () => playSongAudio(song, type));
+    wrap.appendChild(playBtn);
+  }
+
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'audio-chip' + (has ? ' has-audio' : '');
+  chip.textContent = has ? 'Audio ✓' : 'Subir audio';
+  chip.title = has ? 'Sustituir audio' : 'Subir audio (mp3)';
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac';
+  fileInput.className = 'audio-file-input';
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    chip.disabled = true;
+    chip.textContent = 'Subiendo…';
+    try {
+      await uploadSongAudio(song, type, file);
+      await refreshSongs();
+      render();
+    } catch (err) {
+      console.error(err);
+      window.alert(`No se ha podido subir el audio (${err.code || err.message || 'error desconocido'}).`);
+      chip.disabled = false;
+      chip.textContent = has ? 'Audio ✓' : 'Subir audio';
     }
-
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'audio-chip' + (has ? ' has-audio' : '');
-    chip.textContent = has ? `${audioTypeLabel(type)} ✓` : `Subir ${audioTypeLabel(type)}`;
-    chip.title = has ? `Sustituir audio de ${audioTypeLabel(type)}` : `Subir audio de ${audioTypeLabel(type)}`;
-
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac';
-    fileInput.className = 'audio-file-input';
-    fileInput.addEventListener('change', async () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      chip.disabled = true;
-      chip.textContent = 'Subiendo…';
-      try {
-        await uploadSongAudio(song, type, file);
-        await refreshSongs();
-        render();
-      } catch (err) {
-        console.error(err);
-        window.alert(`No se ha podido subir el audio (${err.code || err.message || 'error desconocido'}).`);
-        chip.disabled = false;
-        chip.textContent = has ? `${audioTypeLabel(type)} ✓` : `Subir ${audioTypeLabel(type)}`;
-      }
-    });
-
-    chip.addEventListener('click', () => fileInput.click());
-    wrap.appendChild(chip);
-    wrap.appendChild(fileInput);
-    chips.appendChild(wrap);
   });
+
+  chip.addEventListener('click', () => fileInput.click());
+  wrap.appendChild(chip);
+  wrap.appendChild(fileInput);
+  chips.appendChild(wrap);
 
   row.querySelector('.edit').addEventListener('click', () => openSongModal(song));
   row.querySelector('.delete').addEventListener('click', async () => {
