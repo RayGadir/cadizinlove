@@ -275,6 +275,7 @@ a:hover { color: var(--accent-200); }
   letter-spacing: -0.015em; color: #f6efe2; text-shadow: 0 2px 24px rgba(0,0,0,0.5);
 }
 .login-brand h1 em { font-style: normal; font-weight: 400; color: var(--gold-2); }
+.login-logo { width: 100%; max-width: 300px; height: auto; filter: drop-shadow(0 4px 18px rgba(0,0,0,0.4)); }
 .login-brand p {
   margin: 0; font-family: var(--font-display); font-style: italic; font-size: 17px; line-height: 1.45;
   color: rgba(246,239,226,0.72); max-width: 26ch;
