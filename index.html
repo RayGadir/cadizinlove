@@ -57,6 +57,7 @@
             </label>
             <a href="#" class="login-forgot">He olvidado la contraseña</a>
           </div>
+          <div class="auth-error hidden" id="login-error"></div>
           <button id="login-submit" class="login-submit">Entrar al ensayo</button>
         </div>
 
@@ -68,41 +69,74 @@
 
     <!-- ═══ PENDIENTE DE APROBACIÓN ═══ -->
     <section id="screen-pendiente" class="screen screen-pendiente hidden">
-      <div class="pendiente-head">
-        <div class="rule-row">
-          <span class="rule"></span>
-          <span class="kicker">Solicitud enviada</span>
+
+      <!-- Formulario de alta: se muestra si aún no has enviado tu solicitud -->
+      <div id="pendiente-form">
+        <div class="pendiente-head">
+          <div class="rule-row">
+            <span class="rule"></span>
+            <span class="kicker">Nuevo en el coro</span>
+          </div>
+          <h1>Pide tu entrada</h1>
+          <p>Con tu nombre, correo y una contraseña creamos tu cuenta. Un director y el administrador tendrán que aprobarte antes de poder entrar.</p>
         </div>
-        <h1>Te falta que te abran<br>la puerta</h1>
-        <p>Hacen falta dos firmas: un director y el administrador del coro. En cualquier orden.</p>
+        <div class="login-card" style="background: var(--surface); box-shadow: 0 0 0 1px var(--neutral-800);">
+          <label class="field">
+            <span>Nombre y apellidos</span>
+            <input type="text" id="signup-name" placeholder="Tu nombre" />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input type="email" id="signup-email" placeholder="tu@correo.es" />
+          </label>
+          <label class="field">
+            <span>Contraseña</span>
+            <input type="password" id="signup-password" placeholder="Mínimo 6 caracteres" />
+          </label>
+          <div class="auth-error hidden" id="signup-error"></div>
+          <button id="signup-submit" class="login-submit" style="border-color: var(--accent); color: var(--accent-300);">Enviar solicitud</button>
+        </div>
+        <button id="pendiente-form-volver" class="btn btn-ghost" style="margin-top: var(--space-4);">Volver a la entrada</button>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: var(--space-4);">
-        <div class="signature-row">
-          <span class="icon">
-            <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M128 40a96 96 0 1 0 96 96 96.11 96.11 0 0 0-96-96Zm0 176a80 80 0 1 1 80-80 80.09 80.09 0 0 1-80 80Zm45.66-125.66a8 8 0 0 1 0 11.32L133.66 128l-28-28a8 8 0 0 1 11.31-11.31L128 100.69l34.34-34.35a8 8 0 0 1 11.32 0Z" opacity="0.35"></path><path d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm8-112v40a8 8 0 0 1-16 0v-40a8 8 0 0 1 16 0Z"></path></svg>
-          </span>
-          <span class="info">
-            <span class="name">Director</span>
-            <span class="sub">Pendiente de asignar</span>
-          </span>
-          <span class="status">Pendiente</span>
+      <!-- Estado de la solicitud: se muestra una vez tienes cuenta -->
+      <div id="pendiente-status" class="hidden">
+        <div class="pendiente-head">
+          <div class="rule-row">
+            <span class="rule"></span>
+            <span class="kicker" id="pendiente-status-kicker">Solicitud enviada</span>
+          </div>
+          <h1 id="pendiente-status-title">Te falta que te abran<br>la puerta</h1>
+          <p>Hacen falta dos firmas: un director y el administrador del coro. En cualquier orden.</p>
         </div>
-        <div class="signature-row">
-          <span class="icon">
-            <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm8-112v40a8 8 0 0 1-16 0v-40a8 8 0 0 1 16 0Z"></path></svg>
-          </span>
-          <span class="info">
-            <span class="name">Administrador</span>
-            <span class="sub">Responsable del coro</span>
-          </span>
-          <span class="status">Pendiente</span>
+
+        <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+          <div class="signature-row">
+            <span class="icon" id="pendiente-director-icon">
+              <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm8-112v40a8 8 0 0 1-16 0v-40a8 8 0 0 1 16 0Z"></path></svg>
+            </span>
+            <span class="info">
+              <span class="name">Director</span>
+              <span class="sub">Cualquier director del coro</span>
+            </span>
+            <span class="status" id="pendiente-director-status">Pendiente</span>
+          </div>
+          <div class="signature-row">
+            <span class="icon" id="pendiente-admin-icon">
+              <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm8-112v40a8 8 0 0 1-16 0v-40a8 8 0 0 1 16 0Z"></path></svg>
+            </span>
+            <span class="info">
+              <span class="name">Administrador</span>
+              <span class="sub">Responsable del coro</span>
+            </span>
+            <span class="status" id="pendiente-admin-status">Pendiente</span>
+          </div>
         </div>
+
+        <p class="pendiente-note">Te avisamos aquí dentro en cuanto estés dentro. El director te asignará tu voz al aprobarte.</p>
+
+        <button id="pendiente-volver" class="btn btn-ghost">Salir</button>
       </div>
-
-      <p class="pendiente-note">Te avisamos aquí dentro en cuanto estés dentro. El director te asignará tu voz al aprobarte.</p>
-
-      <button id="pendiente-volver" class="btn btn-ghost">Volver a la entrada</button>
     </section>
 
     <!-- ═══ Cabecera + menú lateral (pantallas con sesión) ═══ -->
@@ -128,10 +162,10 @@
         <button class="drawer-item" data-screen="inicio"><span class="stripe"></span>Novedades</button>
         <button class="drawer-item" data-screen="libreto"><span class="stripe"></span>Repertorio</button>
         <button class="drawer-item" data-screen="audios"><span class="stripe"></span>Audios</button>
-        <button class="drawer-item" data-screen="" disabled><span class="stripe"></span><span class="fill">Mi voz</span><span class="meta">Sin asignar</span></button>
+        <button class="drawer-item" data-screen="" disabled><span class="stripe"></span><span class="fill">Mi voz</span><span class="meta" id="drawer-my-voice">Sin asignar</span></button>
         <button class="drawer-item" data-screen="" disabled><span class="stripe"></span>Perfil del coro</button>
-        <button class="drawer-item" data-screen="director"><span class="stripe"></span>Panel del director</button>
-        <button class="drawer-item" data-screen="admin"><span class="stripe"></span><span class="fill">Administración</span><span class="count hidden" id="drawer-admin-count"></span></button>
+        <button class="drawer-item hidden" data-screen="director" id="drawer-director-item"><span class="stripe"></span>Panel del director</button>
+        <button class="drawer-item hidden" data-screen="admin" id="drawer-admin-item"><span class="stripe"></span><span class="fill">Administración</span><span class="count hidden" id="drawer-admin-count"></span></button>
         <button class="drawer-item" data-screen="" disabled><span class="stripe"></span>Ajustes</button>
       </div>
       <button id="drawer-logout" class="drawer-logout">Salir</button>
@@ -229,7 +263,7 @@
         <div id="admin-activity" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
 
         <div class="panel-footer">
-          <button class="btn btn-primary">Nombrar director</button>
+          <button class="btn btn-primary" id="admin-nombrar-director">Nombrar director</button>
           <button class="btn btn-ghost">Invitar a alguien</button>
         </div>
       </section>
@@ -267,6 +301,6 @@
     <audio id="audio-el" preload="none"></audio>
   </div>
 
-  <script src="js/app.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

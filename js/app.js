@@ -1,3 +1,16 @@
+import {
+  watchAuthState,
+  login,
+  logout,
+  requestAccess,
+  getMember,
+  listMembers,
+  approveMember,
+  rejectMember,
+  assignVoice,
+  promoteToDirector,
+} from './firebase.js';
+
 // Repertorio de un coro de Carnaval de Cádiz. Los cuplés y los estribillos se
 // agrupan en un mismo apartado porque en el libreto van juntos.
 const KIND_ORDER = ['presentacion', 'tango', 'cuple', 'estribillo', 'popurri'];
@@ -25,10 +38,13 @@ const AUDIO_TYPE_LABELS = {
   voces: 'Voces',
 };
 const ROLE_META = {
+  admin: { label: 'Administrador', color: 'var(--gold-2)', border: 'rgba(200,165,91,0.5)' },
   director: { label: 'Director', color: 'var(--gold-2)', border: 'rgba(200,165,91,0.5)' },
   corista: { label: 'Corista', color: 'var(--accent-300)', border: 'var(--accent-700)' },
   pendiente: { label: 'Pendiente', color: 'var(--neutral-500)', border: 'var(--neutral-700)' },
+  rechazado: { label: 'Rechazado', color: '#ff8a80', border: 'rgba(176,0,32,0.4)' },
 };
+const VOICE_OPTIONS = ['Tenor', 'Segunda', 'Bajo', 'Tercera'];
 
 function kindIndex(kind) {
   const i = KIND_ORDER.indexOf(kind);
@@ -51,9 +67,10 @@ const state = {
   audioType: 'grupo',
   currentSongId: null,
   loopEnabled: false,
-  isAdmin: false,
   letraSongId: null,
   letraLines: [],
+  currentUser: null,
+  currentMember: null,
 };
 
 const el = {
@@ -66,8 +83,21 @@ const el = {
   loginPassword: document.getElementById('login-password'),
   loginSubmit: document.getElementById('login-submit'),
   loginPedir: document.getElementById('login-pedir'),
+  loginError: document.getElementById('login-error'),
 
   screenPendiente: document.getElementById('screen-pendiente'),
+  pendienteForm: document.getElementById('pendiente-form'),
+  pendienteStatus: document.getElementById('pendiente-status'),
+  pendienteFormVolver: document.getElementById('pendiente-form-volver'),
+  signupName: document.getElementById('signup-name'),
+  signupEmail: document.getElementById('signup-email'),
+  signupPassword: document.getElementById('signup-password'),
+  signupSubmit: document.getElementById('signup-submit'),
+  signupError: document.getElementById('signup-error'),
+  pendienteStatusKicker: document.getElementById('pendiente-status-kicker'),
+  pendienteStatusTitle: document.getElementById('pendiente-status-title'),
+  pendienteDirectorStatus: document.getElementById('pendiente-director-status'),
+  pendienteAdminStatus: document.getElementById('pendiente-admin-status'),
   pendienteVolver: document.getElementById('pendiente-volver'),
 
   topbar: document.getElementById('topbar'),
@@ -77,6 +107,9 @@ const el = {
   drawerNav: document.getElementById('drawer-nav'),
   drawerLogout: document.getElementById('drawer-logout'),
   drawerAdminCount: document.getElementById('drawer-admin-count'),
+  drawerMyVoice: document.getElementById('drawer-my-voice'),
+  drawerDirectorItem: document.getElementById('drawer-director-item'),
+  drawerAdminItem: document.getElementById('drawer-admin-item'),
 
   searchRow: document.getElementById('search-row'),
   searchInput: document.getElementById('search-input'),
@@ -110,6 +143,7 @@ const el = {
   adminRequests: document.getElementById('admin-requests'),
   adminMembers: document.getElementById('admin-members'),
   adminActivity: document.getElementById('admin-activity'),
+  adminNombrarDirector: document.getElementById('admin-nombrar-director'),
 
   rehearsalToggle: document.getElementById('rehearsal-toggle'),
   rehearsalBar: document.getElementById('rehearsal-bar'),
@@ -129,21 +163,75 @@ const el = {
   bottomBars: document.getElementById('bottom-bars'),
 };
 
-// No hay backend, así que no hay cuentas ni contraseñas reales: el rol de
-// administrador es solo un ajuste guardado en este navegador, y el propio
-// login no comprueba nada todavía (es la maqueta visual, tal y como se trajo
-// de Claude Design). Sirve para distinguir, en este dispositivo, a quien
-// gestiona el tablón/repertorio de quien solo lo consulta.
-const ADMIN_STORAGE_KEY = 'cadizInLove.isAdmin';
-function initAdmin() {
-  localStorage.setItem(ADMIN_STORAGE_KEY, 'true');
-  state.isAdmin = localStorage.getItem(ADMIN_STORAGE_KEY) === 'true';
-  el.adminAvatar.textContent = state.isAdmin ? 'AD' : '·';
-  el.adminAvatar.title = state.isAdmin
-    ? 'Administrador en este navegador (ajuste local, no es una cuenta real)'
-    : 'Miembro';
-  el.drawerSub.textContent = state.isAdmin ? 'Administrador' : 'Miembro';
-  el.inicioGreeting.textContent = state.isAdmin ? 'Bienvenido, administrador' : 'Bienvenido';
+function initials(name) {
+  return (name || '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || '·';
+}
+
+// Refleja en la interfaz (avatar, cajón lateral, saludo) el rol real del
+// componente que ha iniciado sesión, leído de su ficha en Firestore.
+function applyMemberChrome(member) {
+  el.adminAvatar.textContent = initials(member.name);
+  el.adminAvatar.title = member.name || '';
+  el.drawerSub.textContent = (ROLE_META[member.role] || ROLE_META.pendiente).label;
+  el.inicioGreeting.textContent = member.name ? `Bienvenido, ${member.name}` : 'Bienvenido';
+  el.drawerMyVoice.textContent = member.voice || 'Sin asignar';
+  el.drawerDirectorItem.classList.toggle('hidden', member.role !== 'director' && member.role !== 'admin');
+  el.drawerAdminItem.classList.toggle('hidden', member.role !== 'admin');
+}
+
+// Punto central de enrutado según el estado real de sesión de Firebase Auth:
+// sin sesión -> login; con sesión pero sin aprobar -> pantalla de espera;
+// aprobado -> la app, con el panel de director/admin visible según el rol.
+async function handleAuthChange(user) {
+  state.currentUser = user;
+  if (!user) {
+    state.currentMember = null;
+    state.members = [];
+    goAuthScreen('login');
+    return;
+  }
+
+  const member = await getMember(user.uid);
+  state.currentMember = member;
+
+  if (!member || member.role === 'pendiente' || member.role === 'rechazado') {
+    showPendienteStatus(member);
+    goAuthScreen('pendiente');
+    return;
+  }
+
+  applyMemberChrome(member);
+  if (member.role === 'director' || member.role === 'admin') {
+    await refreshMembers();
+  }
+  render();
+  goScreen('inicio');
+}
+
+function showPendienteStatus(member) {
+  el.pendienteForm.classList.add('hidden');
+  el.pendienteStatus.classList.remove('hidden');
+  const rejected = member && member.role === 'rechazado';
+  el.pendienteStatusKicker.textContent = rejected ? 'Solicitud rechazada' : 'Solicitud enviada';
+  el.pendienteStatusTitle.innerHTML = rejected
+    ? 'Tu solicitud no ha<br>sido aceptada'
+    : 'Te falta que te abran<br>la puerta';
+  el.pendienteDirectorStatus.textContent = member?.approvedByDirector ? 'Firmado' : 'Pendiente';
+  el.pendienteAdminStatus.textContent = member?.approvedByAdmin ? 'Firmado' : 'Pendiente';
+}
+
+async function refreshMembers() {
+  try {
+    state.members = await listMembers();
+  } catch (err) {
+    state.members = [];
+  }
 }
 
 // El contenido de #bottom-bars cambia de altura (aparece el reproductor,
@@ -193,16 +281,14 @@ function getAudioUrl(song, type) {
 }
 
 async function loadData() {
-  const [songsRes, avisosRes, membersRes] = await Promise.all([
+  const [songsRes, avisosRes] = await Promise.all([
     fetch('data/songs.json'),
     fetch('data/avisos.json'),
-    fetch('data/members.json'),
   ]);
   const data = await songsRes.json();
   el.groupName.textContent = data.group?.name || 'Cádiz in Love';
   state.songs = data.songs || [];
   state.avisos = await avisosRes.json();
-  state.members = await membersRes.json();
 
   const typesPresent = new Set();
   state.songs.forEach((song) => (song.audios || []).forEach((a) => typesPresent.add(a.type)));
@@ -283,14 +369,62 @@ el.drawerNav.addEventListener('click', (e) => {
   if (!btn || !btn.dataset.screen) return;
   goScreen(btn.dataset.screen);
 });
-el.drawerLogout.addEventListener('click', () => goAuthScreen('login'));
+el.drawerLogout.addEventListener('click', () => logout());
 
-// El login es la maqueta visual tal cual se trajo de Claude Design: no
-// comprueba usuario/contraseña todavía (no hay backend). "Entrar" lleva
-// directo a Inicio, igual que en el diseño original.
-el.loginSubmit.addEventListener('click', () => goScreen('inicio'));
-el.loginPedir.addEventListener('click', (e) => { e.preventDefault(); goAuthScreen('pendiente'); });
-el.pendienteVolver.addEventListener('click', () => goAuthScreen('login'));
+function showAuthError(elm, err) {
+  elm.textContent = authErrorMessage(err);
+  elm.classList.remove('hidden');
+}
+
+function authErrorMessage(err) {
+  const code = err?.code || '';
+  if (code === 'auth/invalid-email') return 'Ese correo no es válido.';
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return 'Correo o contraseña incorrectos.';
+  if (code === 'auth/email-already-in-use') return 'Ya hay una cuenta con ese correo. Entra desde la pantalla anterior.';
+  if (code === 'auth/weak-password') return 'La contraseña necesita al menos 6 caracteres.';
+  if (code === 'auth/missing-password' || code === 'auth/missing-email') return 'Rellena correo y contraseña.';
+  return 'Ha ocurrido un error. Inténtalo de nuevo.';
+}
+
+el.loginSubmit.addEventListener('click', async () => {
+  el.loginError.classList.add('hidden');
+  const email = el.loginEmail.value.trim();
+  const password = el.loginPassword.value;
+  if (!email || !password) return showAuthError(el.loginError, { code: 'auth/missing-password' });
+  el.loginSubmit.disabled = true;
+  try {
+    await login(email, password);
+  } catch (err) {
+    showAuthError(el.loginError, err);
+  } finally {
+    el.loginSubmit.disabled = false;
+  }
+});
+
+el.loginPedir.addEventListener('click', (e) => {
+  e.preventDefault();
+  el.pendienteForm.classList.remove('hidden');
+  el.pendienteStatus.classList.add('hidden');
+  goAuthScreen('pendiente');
+});
+el.pendienteFormVolver.addEventListener('click', () => goAuthScreen('login'));
+el.pendienteVolver.addEventListener('click', () => logout());
+
+el.signupSubmit.addEventListener('click', async () => {
+  el.signupError.classList.add('hidden');
+  const name = el.signupName.value.trim();
+  const email = el.signupEmail.value.trim();
+  const password = el.signupPassword.value;
+  if (!name || !email || !password) return showAuthError(el.signupError, { code: 'auth/missing-password' });
+  el.signupSubmit.disabled = true;
+  try {
+    await requestAccess({ name, email, password });
+  } catch (err) {
+    showAuthError(el.signupError, err);
+  } finally {
+    el.signupSubmit.disabled = false;
+  }
+});
 
 el.searchInput.addEventListener('input', () => {
   state.searchQuery = el.searchInput.value;
@@ -544,6 +678,9 @@ function renderDirector() {
 }
 
 function buildRequestCard(member) {
+  const myRole = state.currentMember?.role;
+  const myField = myRole === 'director' ? 'approvedByDirector' : 'approvedByAdmin';
+  const alreadySigned = member[myField] === true;
   const card = document.createElement('div');
   card.className = 'request-card';
   card.innerHTML = `
@@ -551,13 +688,30 @@ function buildRequestCard(member) {
       <span class="name">${member.name}</span>
       <span class="meta">${member.email || 'Sin correo registrado'}</span>
     </div>
-    <div class="signatures">Falta tu firma</div>
+    <div class="signatures">${alreadySigned ? 'Ya has firmado' : 'Falta tu firma'}</div>
     <div class="actions">
-      <button class="btn btn-primary approve">Aprobar</button>
+      <button class="btn btn-primary approve" ${alreadySigned ? 'disabled' : ''}>Aprobar</button>
       <button class="reject">Rechazar</button>
     </div>
     <div class="hint">La voz se le asigna después, en la lista de componentes.</div>
   `;
+  card.querySelector('.approve').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await approveMember(member, myRole);
+      await refreshMembers();
+      render();
+    } catch (err) {
+      e.target.disabled = false;
+    }
+  });
+  card.querySelector('.reject').addEventListener('click', async () => {
+    try {
+      await rejectMember(member.id);
+      await refreshMembers();
+      render();
+    } catch (err) { /* la fila se mantiene si falla */ }
+  });
   return card;
 }
 
@@ -585,13 +739,14 @@ function renderAdmin() {
   }
 
   el.adminMembers.innerHTML = '';
-  if (state.members.length === 0) {
+  const roster = state.members.filter((m) => m.role !== 'rechazado' && m.role !== 'pendiente');
+  if (roster.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Todavía no hay componentes registrados.';
+    empty.textContent = 'Todavía no hay componentes aprobados.';
     el.adminMembers.appendChild(empty);
   } else {
-    state.members.forEach((m) => {
+    roster.forEach((m) => {
       const meta = ROLE_META[m.role] || ROLE_META.pendiente;
       const row = document.createElement('div');
       row.className = 'member-row';
@@ -600,8 +755,19 @@ function renderAdmin() {
           <span class="name">${m.name}</span>
           <span class="voice">${m.voice || 'Sin voz asignada'}</span>
         </span>
+        <select class="voice-select">
+          <option value="">Sin voz</option>
+          ${VOICE_OPTIONS.map((v) => `<option value="${v}" ${m.voice === v ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>
         <span class="role" style="color:${meta.color};border:1px solid ${meta.border};">${meta.label}</span>
       `;
+      row.querySelector('.voice-select').addEventListener('change', async (e) => {
+        try {
+          await assignVoice(m.id, e.target.value || null);
+          await refreshMembers();
+          render();
+        } catch (err) { /* deja el valor anterior si falla */ }
+      });
       el.adminMembers.appendChild(row);
     });
   }
@@ -611,6 +777,28 @@ function renderAdmin() {
   activityEmpty.className = 'empty-state';
   activityEmpty.textContent = 'Todavía no hay actividad registrada.';
   el.adminActivity.appendChild(activityEmpty);
+}
+
+// Sin un selector de componentes en el diseño original, se pide el correo
+// por un prompt sencillo: solo lo puede ejecutar quien ya es director o
+// administrador (lo hacen cumplir las reglas de Firestore).
+if (el.adminNombrarDirector) {
+  el.adminNombrarDirector.addEventListener('click', async () => {
+    const email = window.prompt('Correo del componente que quieres nombrar director:');
+    if (!email) return;
+    const member = state.members.find((m) => (m.email || '').toLowerCase() === email.trim().toLowerCase());
+    if (!member) {
+      window.alert('No hay ningún componente con ese correo en la lista.');
+      return;
+    }
+    try {
+      await promoteToDirector(member.id);
+      await refreshMembers();
+      render();
+    } catch (err) {
+      window.alert('No se ha podido nombrar director.');
+    }
+  });
 }
 
 /* ══════════════════════════ Reproductor (audio real, compartido) ══════════════════════════ */
@@ -792,6 +980,6 @@ el.audioEl.addEventListener('timeupdate', () => {
 });
 
 syncBottomPadding();
-initAdmin();
 goAuthScreen('login');
 loadData();
+watchAuthState(handleAuthChange);

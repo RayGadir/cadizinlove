@@ -561,6 +561,16 @@ a:hover { color: var(--accent-200); }
 .member-row .info .name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .member-row .info .voice { font-size: 11px; color: var(--neutral-500); }
 .member-row .role { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+.member-row .voice-select {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 6px; font-family: var(--font-body); font-size: 12px; flex: none;
+}
+
+.auth-error {
+  font-size: 13px; line-height: 1.5; color: #ff8a80;
+  background: rgba(176, 0, 32, 0.12); border: 1px solid rgba(176, 0, 32, 0.4);
+  border-radius: var(--radius-md); padding: 10px 12px;
+}
 
 .activity-row { display: flex; gap: var(--space-4); font-size: 12px; line-height: 1.5; }
 .activity-row .when { width: 58px; flex: none; color: var(--neutral-600); font-variant-numeric: tabular-nums; }

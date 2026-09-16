@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Reglas de la colección "members" de Cádiz in Love.
+//
+// - Cualquiera puede crear su PROPIA ficha al registrarse, pero solo con
+//   role: "pendiente" — no puede auto-asignarse director/admin.
+// - Cualquiera puede leer su propia ficha (para ver si ya le han aprobado).
+// - Solo un director o administrador puede leer la lista completa de
+//   componentes, y solo un director o administrador puede modificar
+//   cualquier ficha (aprobar, rechazar, asignar voz, nombrar director).
+// - Nadie puede borrar fichas (se usa role: "rechazado" en vez de borrar).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role;
+    }
+
+    function isDirectorOrAdmin() {
+      return isSignedIn() && myRole() in ['director', 'admin'];
+    }
+
+    match /members/{memberId} {
+      allow get: if isSignedIn() && (request.auth.uid == memberId || isDirectorOrAdmin());
+      allow list: if isDirectorOrAdmin();
+
+      allow create: if isSignedIn()
+        && request.auth.uid == memberId
+        && request.resource.data.role == 'pendiente';
+
+      allow update: if isDirectorOrAdmin();
+
+      allow delete: if false;
+    }
+  }
+}
