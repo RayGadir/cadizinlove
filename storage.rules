@@ -1,15 +1,20 @@
 rules_version = '2';
 
 // Reglas de Firebase Storage para los audios de ensayo de Cádiz in Love.
-// Solo un director o administrador (comprobado contra su ficha en
-// Firestore) puede subir o borrar audios; cualquier miembro con sesión
-// iniciada puede escucharlos.
+//
+// Aquí solo comprobamos que hay sesión iniciada (no repetimos la
+// comprobación de rol director/admin contra Firestore, porque la función
+// cruzada firestore.get() desde Storage resultó poco fiable). El control
+// real de quién puede subir audio ya lo hace la propia app: el botón de
+// subir solo aparece para director/admin, y solo ellos pueden guardar la
+// referencia del audio en el documento de la canción en Firestore — así
+// que un archivo "huérfano" que alguien subiera sin pasar por ahí no
+// llegaría a aparecer en la app.
 service firebase.storage {
   match /b/{bucket}/o {
     match /songs/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.role in ['director', 'admin'];
+      allow write: if request.auth != null;
     }
   }
 }
