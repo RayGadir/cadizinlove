@@ -222,6 +222,10 @@
         <div class="panel-head">
           <h1>Piezas del repertorio</h1>
           <p>Sube la letra, sube el audio y avisa al coro desde la misma línea.</p>
+          <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
+            <button class="btn btn-gold" id="director-crear-notificacion">Crear notificación</button>
+            <button class="btn btn-ghost" id="director-crear-aviso">Crear aviso</button>
+          </div>
         </div>
         <div id="director-pieces" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
 
@@ -260,7 +264,7 @@
 
         <div class="panel-footer">
           <button class="btn btn-primary" id="admin-nombrar-director">Nombrar director</button>
-          <button class="btn btn-ghost">Invitar a alguien</button>
+          <button class="btn btn-ghost" id="admin-invitar">Invitar a alguien</button>
         </div>
       </section>
     </main>
@@ -317,6 +321,25 @@
       <div class="song-modal-actions">
         <button class="btn btn-ghost" id="song-modal-cancel">Cancelar</button>
         <button class="btn btn-gold" id="song-modal-save">Guardar</button>
+      </div>
+    </div>
+
+    <!-- ═══ Modal: crear notificación/aviso ═══ -->
+    <div class="drawer-backdrop hidden" id="aviso-modal-backdrop"></div>
+    <div class="song-modal hidden" id="aviso-modal">
+      <h2 id="aviso-modal-title">Nueva notificación</h2>
+      <label class="field">
+        <span>Título</span>
+        <input type="text" id="aviso-form-title" placeholder="Título" />
+      </label>
+      <label class="field">
+        <span>Mensaje</span>
+        <textarea id="aviso-form-body" rows="5" placeholder="Escribe el mensaje..."></textarea>
+      </label>
+      <div class="auth-error hidden" id="aviso-form-error"></div>
+      <div class="song-modal-actions">
+        <button class="btn btn-ghost" id="aviso-modal-cancel">Cancelar</button>
+        <button class="btn btn-gold" id="aviso-modal-save">Publicar</button>
       </div>
     </div>
   </div>

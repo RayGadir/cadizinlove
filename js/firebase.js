@@ -22,6 +22,8 @@ import {
   addDoc,
   collection,
   getDocs,
+  query,
+  orderBy,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
 import {
@@ -49,6 +51,7 @@ export const storage = getStorage(firebaseApp);
 
 const MEMBERS_COLLECTION = 'members';
 const SONGS_COLLECTION = 'songs';
+const AVISOS_COLLECTION = 'avisos';
 
 export function watchAuthState(callback) {
   return onAuthStateChanged(auth, callback);
@@ -171,4 +174,24 @@ export async function uploadSongAudio(song, type, file) {
     deleteObject(ref(storage, previous.path)).catch(() => {});
   }
   return audios;
+}
+
+/* ══════════════════════════ Novedades (notificaciones y avisos) ══════════════════════════ */
+// Solo puede escribir aquí un director/administrador — lo hacen cumplir las
+// reglas de Firestore. "notificacion" avisa de una letra nueva/actualizada
+// (lleva al Repertorio al pulsarla); "aviso" es un mensaje urgente suelto.
+
+export async function listAvisos() {
+  const snap = await getDocs(query(collection(db, AVISOS_COLLECTION), orderBy('createdAt', 'desc')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export function createAviso({ type, title, body, authorName }) {
+  return addDoc(collection(db, AVISOS_COLLECTION), {
+    type,
+    title,
+    body: body || '',
+    authorName: authorName || '',
+    createdAt: serverTimestamp(),
+  });
 }

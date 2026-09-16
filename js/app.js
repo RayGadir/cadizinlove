@@ -15,6 +15,8 @@ import {
   updateSong,
   deleteSong,
   uploadSongAudio,
+  listAvisos,
+  createAviso,
 } from './firebase.js';
 
 // Repertorio de un coro de Carnaval de Cádiz. Los cuplés y los estribillos se
@@ -75,6 +77,7 @@ const state = {
   loopEnabled: false,
   letraSongId: null,
   letraLines: [],
+  letraAllowAudio: true,
   currentUser: null,
   currentMember: null,
 };
@@ -161,6 +164,18 @@ const el = {
   songModalCancel: document.getElementById('song-modal-cancel'),
   songModalSave: document.getElementById('song-modal-save'),
 
+  avisoModalBackdrop: document.getElementById('aviso-modal-backdrop'),
+  avisoModal: document.getElementById('aviso-modal'),
+  avisoModalTitle: document.getElementById('aviso-modal-title'),
+  avisoFormTitle: document.getElementById('aviso-form-title'),
+  avisoFormBody: document.getElementById('aviso-form-body'),
+  avisoFormError: document.getElementById('aviso-form-error'),
+  avisoModalCancel: document.getElementById('aviso-modal-cancel'),
+  avisoModalSave: document.getElementById('aviso-modal-save'),
+  directorCrearNotificacion: document.getElementById('director-crear-notificacion'),
+  directorCrearAviso: document.getElementById('director-crear-aviso'),
+  adminInvitar: document.getElementById('admin-invitar'),
+
   rehearsalToggle: document.getElementById('rehearsal-toggle'),
   rehearsalBar: document.getElementById('rehearsal-bar'),
   rehearsalClose: document.getElementById('rehearsal-close'),
@@ -222,7 +237,7 @@ async function handleAuthChange(user) {
   }
 
   applyMemberChrome(member);
-  const tasks = [refreshSongs()];
+  const tasks = [refreshSongs(), refreshAvisos()];
   if (member.role === 'director' || member.role === 'admin') {
     tasks.push(refreshMembers());
   }
@@ -297,7 +312,7 @@ function getAudioUrl(song, type) {
   return (audios.find((a) => a.type === type) || audios[0] || {}).url || null;
 }
 
-async function loadData() {
+function loadData() {
   Object.keys(AUDIO_TYPE_LABELS).forEach((type) => {
     const opt = document.createElement('option');
     opt.value = type;
@@ -305,9 +320,6 @@ async function loadData() {
     el.audioTypeSelect.appendChild(opt);
   });
   state.audioType = el.audioTypeSelect.value || 'grupo';
-
-  const avisosRes = await fetch('data/avisos.json');
-  state.avisos = await avisosRes.json();
 }
 
 async function refreshSongs() {
@@ -315,6 +327,14 @@ async function refreshSongs() {
     state.songs = await listSongs();
   } catch (err) {
     state.songs = [];
+  }
+}
+
+async function refreshAvisos() {
+  try {
+    state.avisos = await listAvisos();
+  } catch (err) {
+    state.avisos = [];
   }
 }
 
@@ -453,6 +473,18 @@ function renderInicio() {
   renderRepertoireSummary();
 }
 
+const AVISO_TYPE_LABELS = { notificacion: 'Nueva letra', aviso: 'Urgente' };
+
+function formatAvisoDate(aviso) {
+  const millis = aviso.createdAt?.toMillis?.();
+  if (!millis) return '';
+  return new Date(millis).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+}
+
+// "Novedades" solo muestra dos tipos de publicación del director/admin:
+// "notificacion" (avisa de una letra nueva/actualizada — lleva al
+// Repertorio al pulsarla) y "aviso" (un mensaje urgente suelto, no
+// navegable). No hay audios ni nada más aquí.
 function renderAvisos() {
   el.avisosList.innerHTML = '';
   if (state.avisos.length === 0) {
@@ -463,17 +495,22 @@ function renderAvisos() {
     return;
   }
   state.avisos.forEach((aviso) => {
+    const isNotificacion = aviso.type === 'notificacion';
     const card = document.createElement('article');
-    card.className = 'aviso-card';
+    card.className = 'aviso-card' + (isNotificacion ? ' is-notificacion' : ' is-urgente');
     card.innerHTML = `
       <div class="aviso-card-top">
-        <span class="tag-pill">${aviso.tag || ''}</span>
-        <time>${aviso.date || ''}</time>
+        <span class="tag-pill">${AVISO_TYPE_LABELS[aviso.type] || ''}</span>
+        <time>${formatAvisoDate(aviso)}</time>
       </div>
       <h3 class="aviso-title">${aviso.title || ''}</h3>
       <p class="aviso-body">${aviso.body || ''}</p>
-      ${aviso.signoff ? `<div class="aviso-signoff">${aviso.signoff}</div>` : ''}
+      ${aviso.authorName ? `<div class="aviso-signoff">${aviso.authorName}</div>` : ''}
     `;
+    if (isNotificacion) {
+      card.classList.add('clickable');
+      card.addEventListener('click', () => goScreen('libreto'));
+    }
     el.avisosList.appendChild(card);
   });
 }
@@ -553,7 +590,7 @@ function buildLibretoRow(song) {
       <div class="song-card-title">${song.title}</div>
     </div>
   `;
-  card.addEventListener('click', () => openLetra(song));
+  card.addEventListener('click', () => openLetra(song, { allowAudio: false }));
   return card;
 }
 
@@ -592,8 +629,11 @@ function toggleAudioRow(song) {
 
 /* ══════════════════════════ Letra (lectura + karaoke cuando hay audio) ══════════════════════════ */
 
-function openLetra(song) {
+// allowAudio: false cuando se entra desde Repertorio — ese apartado es solo
+// para leer la letra, sin ninguna opción de audio (eso vive en Audios).
+function openLetra(song, { allowAudio = true } = {}) {
   state.letraSongId = song.id;
+  state.letraAllowAudio = allowAudio;
   el.letraTitle.textContent = song.title;
   renderLetraVoiceRow(song);
   renderLetraLines(song);
@@ -601,14 +641,14 @@ function openLetra(song) {
 }
 
 function renderLetraVoiceRow(song) {
-  const hasAudio = (song.audios || []).length > 0;
+  const hasAudio = state.letraAllowAudio && (song.audios || []).length > 0;
   const isCurrent = song.id === state.currentSongId;
   el.letraVoiceRow.innerHTML = `
     <span class="letra-voice-tag">${KIND_LABELS[song.kind] || song.kind}</span>
     ${hasAudio
       ? `<button class="song-card-play btn-icon" id="letra-play-btn" style="width:36px;height:36px;">${isCurrent && !el.audioEl.paused ? '⏸' : '▶'}</button>
          <span class="letra-voice-note">Toca para escuchar mientras sigues la letra.</span>`
-      : '<span class="letra-voice-note">Todavía no hay audio para esta letra.</span>'}
+      : ''}
   `;
   if (hasAudio) {
     document.getElementById('letra-play-btn').addEventListener('click', () => toggleAudioRow(song));
@@ -901,6 +941,53 @@ el.songModalSave.addEventListener('click', async () => {
   }
 });
 
+/* ══════════════════════════ Modal: crear notificación/aviso ══════════════════════════ */
+
+let avisoModalType = 'notificacion';
+
+function openAvisoModal(type) {
+  avisoModalType = type;
+  el.avisoModalTitle.textContent = type === 'notificacion' ? 'Nueva notificación' : 'Nuevo aviso';
+  el.avisoFormTitle.value = '';
+  el.avisoFormBody.value = '';
+  el.avisoFormError.classList.add('hidden');
+  el.avisoModalBackdrop.classList.remove('hidden');
+  el.avisoModal.classList.remove('hidden');
+}
+
+function closeAvisoModal() {
+  el.avisoModalBackdrop.classList.add('hidden');
+  el.avisoModal.classList.add('hidden');
+}
+
+if (el.directorCrearNotificacion) el.directorCrearNotificacion.addEventListener('click', () => openAvisoModal('notificacion'));
+if (el.directorCrearAviso) el.directorCrearAviso.addEventListener('click', () => openAvisoModal('aviso'));
+el.avisoModalCancel.addEventListener('click', closeAvisoModal);
+el.avisoModalBackdrop.addEventListener('click', closeAvisoModal);
+
+el.avisoModalSave.addEventListener('click', async () => {
+  const title = el.avisoFormTitle.value.trim();
+  const body = el.avisoFormBody.value.trim();
+  if (!title) {
+    el.avisoFormError.textContent = 'Ponle un título.';
+    el.avisoFormError.classList.remove('hidden');
+    return;
+  }
+  el.avisoModalSave.disabled = true;
+  try {
+    await createAviso({ type: avisoModalType, title, body, authorName: state.currentMember?.name });
+    await refreshAvisos();
+    render();
+    closeAvisoModal();
+  } catch (err) {
+    console.error(err);
+    el.avisoFormError.textContent = 'No se ha podido publicar. Inténtalo de nuevo.';
+    el.avisoFormError.classList.remove('hidden');
+  } finally {
+    el.avisoModalSave.disabled = false;
+  }
+});
+
 /* ══════════════════════════ Panel de Administración ══════════════════════════ */
 
 function renderAdmin() {
@@ -995,6 +1082,21 @@ if (el.adminNombrarDirector) {
       render();
     } catch (err) {
       window.alert('No se ha podido nombrar director.');
+    }
+  });
+}
+
+// No hay un sistema de invitaciones con código: cualquiera puede pedir
+// entrada desde la app y luego se aprueba desde aquí. "Invitar" copia el
+// enlace del sitio al portapapeles para que sea fácil compartirlo.
+if (el.adminInvitar) {
+  el.adminInvitar.addEventListener('click', async () => {
+    const url = window.location.origin;
+    try {
+      await navigator.clipboard.writeText(url);
+      window.alert(`Enlace copiado: ${url}\n\nCompártelo con quien quieras invitar — puede pedir su entrada desde ahí y luego la apruebas tú (o un director).`);
+    } catch (err) {
+      window.prompt('Copia este enlace para compartirlo:', url);
     }
   });
 }
