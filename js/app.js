@@ -760,8 +760,6 @@ function renderDirector() {
 
 function buildRequestCard(member) {
   const myRole = state.currentMember?.role;
-  const myField = myRole === 'director' ? 'approvedByDirector' : 'approvedByAdmin';
-  const alreadySigned = member[myField] === true;
   const card = document.createElement('div');
   card.className = 'request-card';
   card.innerHTML = `
@@ -769,9 +767,8 @@ function buildRequestCard(member) {
       <span class="name">${member.name}</span>
       <span class="meta">${member.email || 'Sin correo registrado'}</span>
     </div>
-    <div class="signatures">${alreadySigned ? 'Ya has firmado' : 'Falta tu firma'}</div>
     <div class="actions">
-      <button class="btn btn-primary approve" ${alreadySigned ? 'disabled' : ''}>Aprobar</button>
+      <button class="btn btn-primary approve">Aprobar</button>
       <button class="reject">Rechazar</button>
     </div>
     <div class="hint">La voz se le asigna después, en la lista de componentes.</div>
