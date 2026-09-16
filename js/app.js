@@ -751,7 +751,7 @@ function buildDirectorSongRow(song) {
 
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = 'audio/*';
+    fileInput.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac';
     fileInput.className = 'audio-file-input';
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files[0];
