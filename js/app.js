@@ -19,6 +19,8 @@ import {
   uploadSongAudio,
   listAvisos,
   createAviso,
+  updateAviso,
+  deleteAviso,
 } from './firebase.js';
 
 // Repertorio de un coro de Carnaval de Cádiz. Los cuplés y los estribillos se
@@ -492,7 +494,7 @@ function formatAvisoDate(aviso) {
 // navegable). No hay audios ni nada más aquí.
 const NOVEDADES_LIMIT = 2;
 
-function buildAvisoCard(aviso, { clickable = false } = {}) {
+function buildAvisoCard(aviso, { clickable = false, editable = false } = {}) {
   const isNotificacion = aviso.type === 'notificacion';
   const card = document.createElement('article');
   card.className = 'aviso-card' + (isNotificacion ? ' is-notificacion' : ' is-urgente');
@@ -508,6 +510,23 @@ function buildAvisoCard(aviso, { clickable = false } = {}) {
   if (clickable && isNotificacion) {
     card.classList.add('clickable');
     card.addEventListener('click', () => goScreen('libreto'));
+  }
+  if (editable) {
+    const actions = document.createElement('div');
+    actions.className = 'aviso-card-actions';
+    actions.innerHTML = `
+      <button class="btn-icon-text aviso-edit-btn" title="Editar">Editar</button>
+      <button class="btn-icon-text aviso-delete-btn" title="Eliminar">Eliminar</button>
+    `;
+    actions.querySelector('.aviso-edit-btn').addEventListener('click', (event) => {
+      event.stopPropagation();
+      openAvisoModal(aviso.type, aviso);
+    });
+    actions.querySelector('.aviso-delete-btn').addEventListener('click', (event) => {
+      event.stopPropagation();
+      handleDeleteAviso(aviso);
+    });
+    card.appendChild(actions);
   }
   return card;
 }
@@ -525,7 +544,8 @@ function renderAvisos() {
     el.avisosList.appendChild(empty);
     return;
   }
-  latest.forEach((aviso) => el.avisosList.appendChild(buildAvisoCard(aviso, { clickable: true })));
+  const canManage = state.currentMember?.role === 'director' || state.currentMember?.role === 'admin';
+  latest.forEach((aviso) => el.avisosList.appendChild(buildAvisoCard(aviso, { clickable: true, editable: canManage })));
 }
 
 // Histórico completo (todas las notificaciones y avisos publicados, no solo
@@ -540,7 +560,7 @@ function renderAvisoHistory() {
     el.directorAvisosHistory.appendChild(empty);
     return;
   }
-  state.avisos.forEach((aviso) => el.directorAvisosHistory.appendChild(buildAvisoCard(aviso)));
+  state.avisos.forEach((aviso) => el.directorAvisosHistory.appendChild(buildAvisoCard(aviso, { editable: true })));
 }
 
 function renderRepertoireSummary() {
@@ -1068,20 +1088,40 @@ el.songModalSave.addEventListener('click', async () => {
 /* ══════════════════════════ Modal: crear notificación/aviso ══════════════════════════ */
 
 let avisoModalType = 'notificacion';
+let avisoModalEditingId = null;
 
-function openAvisoModal(type) {
+function openAvisoModal(type, existingAviso = null) {
   avisoModalType = type;
-  el.avisoModalTitle.textContent = type === 'notificacion' ? 'Nueva notificación' : 'Nuevo aviso';
-  el.avisoFormTitle.value = '';
-  el.avisoFormBody.value = '';
+  avisoModalEditingId = existingAviso ? existingAviso.id : null;
+  const isEditing = !!existingAviso;
+  el.avisoModalTitle.textContent = isEditing
+    ? (type === 'notificacion' ? 'Editar notificación' : 'Editar aviso')
+    : (type === 'notificacion' ? 'Nueva notificación' : 'Nuevo aviso');
+  el.avisoFormTitle.value = existingAviso ? existingAviso.title || '' : '';
+  el.avisoFormBody.value = existingAviso ? existingAviso.body || '' : '';
+  el.avisoModalSave.textContent = isEditing ? 'Guardar' : 'Publicar';
   el.avisoFormError.classList.add('hidden');
   el.avisoModalBackdrop.classList.remove('hidden');
   el.avisoModal.classList.remove('hidden');
 }
 
 function closeAvisoModal() {
+  avisoModalEditingId = null;
   el.avisoModalBackdrop.classList.add('hidden');
   el.avisoModal.classList.add('hidden');
+}
+
+async function handleDeleteAviso(aviso) {
+  const isNotificacion = aviso.type === 'notificacion';
+  if (!window.confirm(`¿Eliminar ${isNotificacion ? 'esta notificación' : 'este aviso'}? Esta acción no se puede deshacer.`)) return;
+  try {
+    await deleteAviso(aviso.id);
+    await refreshAvisos();
+    render();
+  } catch (err) {
+    console.error(err);
+    window.alert('No se ha podido eliminar. Inténtalo de nuevo.');
+  }
 }
 
 if (el.directorCrearNotificacion) el.directorCrearNotificacion.addEventListener('click', () => openAvisoModal('notificacion'));
@@ -1099,13 +1139,17 @@ el.avisoModalSave.addEventListener('click', async () => {
   }
   el.avisoModalSave.disabled = true;
   try {
-    await createAviso({ type: avisoModalType, title, body, authorName: state.currentMember?.name });
+    if (avisoModalEditingId) {
+      await updateAviso(avisoModalEditingId, { title, body });
+    } else {
+      await createAviso({ type: avisoModalType, title, body, authorName: state.currentMember?.name });
+    }
     await refreshAvisos();
     render();
     closeAvisoModal();
   } catch (err) {
     console.error(err);
-    el.avisoFormError.textContent = 'No se ha podido publicar. Inténtalo de nuevo.';
+    el.avisoFormError.textContent = 'No se ha podido guardar. Inténtalo de nuevo.';
     el.avisoFormError.classList.remove('hidden');
   } finally {
     el.avisoModalSave.disabled = false;

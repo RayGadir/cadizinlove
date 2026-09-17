@@ -200,3 +200,11 @@ export function createAviso({ type, title, body, authorName }) {
     createdAt: serverTimestamp(),
   });
 }
+
+export function updateAviso(id, { title, body }) {
+  return updateDoc(doc(db, AVISOS_COLLECTION, id), { title, body: body || '' });
+}
+
+export function deleteAviso(id) {
+  return deleteDoc(doc(db, AVISOS_COLLECTION, id));
+}

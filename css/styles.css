@@ -393,6 +393,14 @@ a:hover { color: var(--accent-200); }
 .aviso-title { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 17px; }
 .aviso-body { margin: 0; font-size: 13px; line-height: 1.55; color: var(--neutral-700); }
 .aviso-signoff { font-size: 11px; color: var(--neutral-600); }
+.aviso-card-actions { display: flex; gap: var(--space-3); margin-top: var(--space-2); }
+.btn-icon-text {
+  background: transparent; border: 1px solid var(--neutral-300); border-radius: var(--radius-sm);
+  padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--neutral-700); cursor: pointer;
+}
+.btn-icon-text:hover { border-color: var(--neutral-400); background: var(--neutral-100); }
+.aviso-delete-btn { color: #b8496b; border-color: rgba(184,73,107,0.4); }
+.aviso-delete-btn:hover { background: rgba(184,73,107,0.08); }
 
 .repertoire-summary { padding: var(--space-8) var(--space-6) var(--space-4); display: flex; align-items: baseline; justify-content: space-between; }
 .repertoire-summary h2 { margin: 0; font-family: var(--font-heading); font-weight: 500; font-size: 15px; }
