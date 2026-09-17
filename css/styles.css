@@ -734,13 +734,12 @@ a:hover { color: var(--accent-200); }
 }
 #player-title { font-size: 11px; text-align: center; color: var(--accent-200); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.player-buttons-row { display: flex; align-items: center; justify-content: center; gap: 32px; }
+.player-buttons-row { display: flex; align-items: center; justify-content: center; gap: 24px; }
 .player-btn {
-  background: none; border: none; padding: 6px; line-height: 1; cursor: pointer;
-  color: var(--gold-3); font-size: 20px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 10px; line-height: 1; cursor: pointer;
+  color: var(--gold-3); font-size: 28px; display: flex; align-items: center; justify-content: center;
 }
-.player-btn svg { display: block; }
-.player-btn-play { font-size: 28px; color: #ffffff; }
+.player-btn-play { font-size: 38px; color: #ffffff; }
 .player-btn.active { color: #ffffff; }
 
 .player-seek-row { display: flex; align-items: center; gap: var(--space-3); }

@@ -1387,11 +1387,11 @@ el.playerPlayPause.addEventListener('click', () => {
 // sincronizado también si el audio se pausa desde los controles del sistema
 // operativo).
 el.audioEl.addEventListener('play', () => {
-  el.playerPlayPause.textContent = '⏸';
+  el.playerPlayPause.innerHTML = '<i class="fa-solid fa-pause"></i>';
   refreshNowPlayingUI();
 });
 el.audioEl.addEventListener('pause', () => {
-  el.playerPlayPause.textContent = '▶';
+  el.playerPlayPause.innerHTML = '<i class="fa-solid fa-play"></i>';
   refreshNowPlayingUI();
 });
 
