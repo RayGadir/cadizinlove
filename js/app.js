@@ -227,6 +227,7 @@ async function handleAuthChange(user) {
   if (!user) {
     state.currentMember = null;
     state.members = [];
+    stopRehearsal();
     goAuthScreen('login');
     return;
   }
