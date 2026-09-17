@@ -196,6 +196,8 @@ const el = {
   playerLoop: document.getElementById('player-loop'),
   playerTitle: document.getElementById('player-title'),
   playerSeek: document.getElementById('player-seek'),
+  playerCurrentTime: document.getElementById('player-current-time'),
+  playerDuration: document.getElementById('player-duration'),
   audioEl: document.getElementById('audio-el'),
   bottomBars: document.getElementById('bottom-bars'),
 };
@@ -1403,6 +1405,13 @@ el.audioEl.addEventListener('ended', playNext);
 const SEEK_RESOLUTION = 1000;
 let isSeeking = false;
 
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
 el.playerSeek.addEventListener('input', () => {
   isSeeking = true;
   if (!el.audioEl.duration) return;
@@ -1417,6 +1426,8 @@ el.audioEl.addEventListener('timeupdate', () => {
   if (!isSeeking && el.audioEl.duration) {
     el.playerSeek.value = (el.audioEl.currentTime / el.audioEl.duration) * SEEK_RESOLUTION;
   }
+  el.playerCurrentTime.textContent = formatTime(el.audioEl.currentTime);
+  el.playerDuration.textContent = formatTime(el.audioEl.duration);
   updateKaraokeHighlight();
 });
 

@@ -729,13 +729,25 @@ a:hover { color: var(--accent-200); }
 
 .player-bar {
   background: rgba(95, 34, 55, 0.96); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border); padding: var(--space-4) var(--space-6);
-  display: flex; align-items: center; gap: var(--space-4);
+  border-top: 1px solid var(--border); padding: var(--space-3) var(--space-6) var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-2);
 }
-.player-track { flex: 1; min-width: 0; }
-#player-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 5px; }
+#player-title { font-size: 11px; text-align: center; color: var(--accent-200); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-#player-seek { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; margin: 0; touch-action: pan-x; }
+.player-buttons-row { display: flex; align-items: center; justify-content: center; gap: 32px; }
+.player-btn {
+  background: none; border: none; padding: 6px; line-height: 1; cursor: pointer;
+  color: var(--gold-3); font-size: 20px; display: flex; align-items: center; justify-content: center;
+}
+.player-btn svg { display: block; }
+.player-btn-play { font-size: 28px; color: #ffffff; }
+.player-btn.active { color: #ffffff; }
+
+.player-seek-row { display: flex; align-items: center; gap: var(--space-3); }
+.player-seek-row span { font-size: 10px; color: var(--accent-200); opacity: .7; min-width: 30px; }
+#player-duration { text-align: right; }
+
+#player-seek { flex: 1; -webkit-appearance: none; appearance: none; height: 24px; background: transparent; margin: 0; touch-action: pan-x; }
 #player-seek::-webkit-slider-runnable-track { height: 2px; border-radius: 2px; background: var(--neutral-800); }
 #player-seek::-moz-range-track { height: 2px; border-radius: 2px; background: var(--neutral-800); }
 #player-seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); margin-top: -6px; cursor: pointer; }
