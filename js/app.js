@@ -1315,7 +1315,6 @@ function renderLetraLines(song) {
     pendingGap = false;
   });
   state.letraLines = lines;
-  state.letraLineOffsets = computeLetraLineOffsets(lines);
   el.letraLines.innerHTML = lines
     .map((l) => `<p class="letra-line${l.gap ? ' gap' : ''}">${l.text}</p>`)
     .join('');
@@ -1323,46 +1322,13 @@ function renderLetraLines(song) {
   updateKaraokeHighlight();
 }
 
-// No hay marcas de tiempo reales por verso, así que se aproxima el instante
-// en que empieza cada línea repartiendo la duración según el peso de cada
-// una (nº de caracteres) en vez de a partes iguales — una línea larga tarda
-// más en cantarse que una corta. Los huecos en blanco del libreto (pausas
-// instrumentales/coro) suman un peso extra fijo para no acortarlos a cero.
-const GAP_PAUSE_WEIGHT = 40;
-function computeLetraLineOffsets(lines) {
-  const weights = lines.map((l) => Math.max(l.text.trim().length, 1) + (l.gap ? GAP_PAUSE_WEIGHT : 0));
-  const total = weights.reduce((a, b) => a + b, 0) || 1;
-  const starts = [];
-  let acc = 0;
-  weights.forEach((w) => {
-    starts.push(acc / total);
-    acc += w;
-  });
-  return starts; // proporción [0..1) en la que empieza cada línea
-}
-
-// Mientras suena el audio de la canción que se está leyendo, resalta la
-// línea cuya proporción de inicio (ver computeLetraLineOffsets) es la más
-// avanzada sin superar la posición real de reproducción.
+// Desactivado: sin marcas de tiempo reales por verso, cualquier reparto
+// aproximado (por nº de línea o por longitud de texto) se desincroniza en
+// canciones con pausas/coros irregulares — se dejó de intentar seguir el
+// ritmo y la letra se muestra como texto normal mientras suena el audio.
 function updateKaraokeHighlight() {
-  if (state.screen !== 'letra' || !state.letraLines.length) return;
-  const children = [...el.letraLines.children];
-  const isCurrent = state.letraSongId === state.currentSongId;
-  if (!isCurrent || !el.audioEl.duration) {
-    children.forEach((p) => p.classList.remove('current', 'near'));
-    return;
-  }
-  const progress = el.audioEl.currentTime / el.audioEl.duration;
-  const offsets = state.letraLineOffsets || [];
-  let idx = 0;
-  for (let i = 0; i < offsets.length; i++) {
-    if (offsets[i] <= progress) idx = i;
-    else break;
-  }
-  children.forEach((p, i) => {
-    p.classList.toggle('current', i === idx);
-    p.classList.toggle('near', Math.abs(i - idx) === 1);
-  });
+  if (!state.letraLines.length) return;
+  [...el.letraLines.children].forEach((p) => p.classList.remove('current', 'near'));
 }
 
 el.letraBack.addEventListener('click', () => goScreen('libreto'));
