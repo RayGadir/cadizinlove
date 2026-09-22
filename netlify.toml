@@ -6,3 +6,22 @@
   [headers.values]
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
+
+# Sin build step ni nombres de archivo con hash, el navegador puede quedarse
+# con una copia vieja de index.html/js/css en caché y no notar que hay una
+# versión nueva desplegada. "no-cache" obliga a revalidar con el servidor en
+# cada carga (rápido, vía ETag) en vez de servir la copia local a ciegas.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "no-cache"

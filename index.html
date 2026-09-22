@@ -49,14 +49,17 @@
           </label>
           <label class="field">
             <span>Contraseña</span>
-            <input type="password" id="login-password" placeholder="••••••••" />
+            <div class="password-field">
+              <input type="password" id="login-password" placeholder="••••••••" />
+              <button type="button" class="password-toggle" data-target="login-password" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+            </div>
           </label>
           <div class="login-row">
             <label class="login-remember">
               <input type="checkbox" checked />
               Recordarme
             </label>
-            <a href="#" class="login-forgot">He olvidado la contraseña</a>
+            <a href="#" class="login-forgot" id="login-forgot">He olvidado la contraseña</a>
           </div>
           <div class="auth-error hidden" id="login-error"></div>
           <button id="login-submit" class="login-submit">Entrar al ensayo</button>
@@ -92,7 +95,10 @@
           </label>
           <label class="field">
             <span>Contraseña</span>
-            <input type="password" id="signup-password" placeholder="Mínimo 6 caracteres" />
+            <div class="password-field">
+              <input type="password" id="signup-password" placeholder="Mínimo 6 caracteres" />
+              <button type="button" class="password-toggle" data-target="signup-password" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+            </div>
           </label>
           <div class="auth-error hidden" id="signup-error"></div>
           <button id="signup-submit" class="login-submit" style="border-color: var(--accent); color: var(--accent-300);">Enviar solicitud</button>
@@ -149,7 +155,7 @@
         <div class="header-kicker">Coro · Carnaval 2027</div>
         <div class="header-name" id="group-name">Cádiz in Love</div>
       </div>
-      <div class="avatar" id="admin-avatar" title="Cargando...">…</div>
+      <button class="avatar" id="admin-avatar" title="Cargando..." aria-label="Mi perfil">…</button>
     </header>
 
     <div class="drawer-backdrop hidden" id="drawer-backdrop"></div>
@@ -160,9 +166,11 @@
         <span class="sub" id="drawer-sub">Administrador</span>
       </div>
       <div class="drawer-nav" id="drawer-nav">
-        <button class="drawer-item" data-screen="inicio"><span class="stripe"></span>Novedades</button>
+        <button class="drawer-item" data-screen="inicio"><span class="stripe"></span>El Tablón</button>
         <button class="drawer-item" data-screen="libreto"><span class="stripe"></span>Libreto</button>
         <button class="drawer-item" data-screen="audios"><span class="stripe"></span>Audios</button>
+        <button class="drawer-item" data-screen="ensayo" id="drawer-ensayo-item"><span class="stripe"></span>Local del Ensayo</button>
+        <button class="drawer-item" data-screen="orquesta"><span class="stripe"></span>Orquesta</button>
         <button class="drawer-item hidden" data-screen="director" id="drawer-director-item"><span class="stripe"></span>Panel del director</button>
         <button class="drawer-item hidden" data-screen="admin" id="drawer-admin-item"><span class="stripe"></span><span class="fill">Administración</span><span class="count hidden" id="drawer-admin-count"></span></button>
       </div>
@@ -182,11 +190,14 @@
           <p id="inicio-subtitle">Aquí verás los avisos de dirección y las novedades del libreto.</p>
         </div>
         <div id="avisos-list" class="avisos-list"></div>
-        <div class="repertoire-summary">
-          <h2>El libreto</h2>
+        <div class="week-card">
+          <div class="repertoire-summary">
+          <h2>Pa esta semana, o ya estás tu con Monje</h2>
           <span id="repertoire-count"></span>
         </div>
         <div id="repertoire-list" class="repertoire-list"></div>
+        </div>
+        <div id="continue-slot"></div>
       </section>
 
       <!-- ═══ REPERTORIO (Libreto, solo lectura) ═══ -->
@@ -199,6 +210,15 @@
         </div>
         <div id="audios-list"></div>
       </section>
+
+      <!-- ═══ LOCAL DEL ENSAYO (audios por voz) ═══ -->
+      <section id="ensayo-view" class="screen panel-screen hidden"></section>
+
+      <!-- ═══ ORQUESTA (audios y vídeos) ═══ -->
+      <section id="orquesta-view" class="screen panel-screen hidden"></section>
+
+      <!-- ═══ MI PERFIL ═══ -->
+      <section id="perfil-view" class="screen panel-screen hidden"></section>
 
       <!-- ═══ LETRA (letra + karaoke cuando hay audio) ═══ -->
       <section id="letra-view" class="screen screen-letra hidden">
@@ -221,30 +241,59 @@
           </div>
         </div>
         <div class="panel-head">
-          <h1>Piezas del libreto</h1>
-          <p>Sube la letra, sube el audio y avisa al coro desde la misma línea.</p>
-          <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
-            <button class="btn btn-gold" id="director-crear-notificacion">Crear notificación</button>
-            <button class="btn btn-ghost" id="director-crear-aviso">Crear aviso</button>
+          <h1>Panel del director</h1>
+        </div>
+        <div class="director-tabs" role="tablist">
+          <button type="button" class="director-tab active" data-group="timbrazos" role="tab">Timbrazos</button>
+          <button type="button" class="director-tab" data-group="repertorio" role="tab">Repertorio</button>
+          <button type="button" class="director-tab" data-group="componente" role="tab">Componente</button>
+        </div>
+
+        <!-- 1. Timbrazos -->
+        <div class="director-group" data-group="timbrazos">
+          <div class="panel-head" style="padding-top: var(--space-4);">
+            <p>Avisa al coro: crea, edita o elimina timbrazos y consulta el histórico.</p>
+            <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
+              <button class="btn btn-gold" id="director-crear-timbrazo">Nuevo timbrazo</button>
+            </div>
           </div>
+          <div class="section-label">
+            <span class="rule"></span>
+            <h2>Histórico de timbrazos</h2>
+          </div>
+          <div id="director-avisos-history" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
         </div>
-        <div id="director-pieces" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
 
-        <div class="section-label">
-          <span class="rule"></span>
-          <h2>Quieren entrar</h2>
-          <span class="count" id="director-requests-count">0</span>
+        <!-- 2. Repertorio -->
+        <div class="director-group hidden" data-group="repertorio">
+          <div class="panel-head" style="padding-top: var(--space-4);">
+            <p>Incluye, edita o elimina letras y audios de cada pieza.</p>
+          </div>
+          <div id="director-pieces" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
         </div>
-        <div id="director-requests" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
 
-        <div class="repertoire-summary"><h2>Componentes</h2><span>voz y rol</span></div>
-        <div id="director-members" style="padding: 0 var(--space-6); display: flex; flex-direction: column;"></div>
+        <!-- 3. Componente -->
+        <div class="director-group hidden" data-group="componente">
+          <div class="panel-head" style="padding-top: var(--space-4);">
+            <p>Invita a gente nueva, asigna voces y gestiona a los coristas.</p>
+            <div style="display: flex; gap: var(--space-3); margin-top: var(--space-4);">
+              <button class="btn btn-gold" id="director-invitar">Invitar</button>
+            </div>
+          </div>
 
-        <div class="section-label">
-          <span class="rule"></span>
-          <h2>Histórico de notificaciones y avisos</h2>
+          <div class="section-label">
+            <span class="rule"></span>
+            <h2>Quieren entrar</h2>
+            <span class="count" id="director-requests-count">0</span>
+          </div>
+          <div id="director-requests" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
+
+          <div class="repertoire-summary"><h2>Coristas actuales</h2><span>voz y rol</span></div>
+          <div id="director-members" style="padding: 0 var(--space-6); display: flex; flex-direction: column;"></div>
+
+          <div class="repertoire-summary"><h2>Coristas eliminados</h2><span id="director-removed-count">0</span></div>
+          <div id="director-removed" style="padding: 0 var(--space-6); display: flex; flex-direction: column;"></div>
         </div>
-        <div id="director-avisos-history" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
       </section>
 
       <!-- ═══ PANEL DE ADMINISTRACIÓN ═══ -->
@@ -296,7 +345,10 @@
       </div>
 
       <div id="player-bar" class="player-bar hidden">
-        <div id="player-title">—</div>
+        <div class="player-head">
+          <div id="player-title">—</div>
+          <button id="player-close" class="player-close" title="Cerrar reproductor" aria-label="Cerrar reproductor"><i class="fa-solid fa-xmark"></i></button>
+        </div>
         <div class="player-buttons-row">
           <button id="player-prev" class="player-btn" title="Anterior"><i class="fa-solid fa-backward-step"></i></button>
           <button id="player-playpause" class="player-btn player-btn-play" title="Reproducir/Pausar"><i class="fa-solid fa-play"></i></button>
@@ -337,10 +389,17 @@
       </div>
     </div>
 
-    <!-- ═══ Modal: crear notificación/aviso ═══ -->
+    <!-- ═══ Aviso Orquesta (sin la dirección del sitio) ═══ -->
+    <div class="drawer-backdrop hidden" id="orquesta-msg-backdrop"></div>
+    <div class="postit hidden" id="orquesta-msg">
+      <p id="orquesta-msg-text"></p>
+      <button class="postit-ok" id="orquesta-msg-ok">Aceptar</button>
+    </div>
+
+    <!-- ═══ Modal: crear timbrazo ═══ -->
     <div class="drawer-backdrop hidden" id="aviso-modal-backdrop"></div>
     <div class="song-modal hidden" id="aviso-modal">
-      <h2 id="aviso-modal-title">Nueva notificación</h2>
+      <h2 id="aviso-modal-title">Nuevo timbrazo</h2>
       <label class="field">
         <span>Título</span>
         <input type="text" id="aviso-form-title" placeholder="Título" />

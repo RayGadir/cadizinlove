@@ -7,7 +7,7 @@ import {
   listMembers,
   approveMember,
   rejectMember,
-  assignVoice,
+  assignVoices,
   renameMember,
   promoteToDirector,
   setMemberRole,
@@ -21,6 +21,16 @@ import {
   createAviso,
   updateAviso,
   deleteAviso,
+  listEnsayoAudios,
+  uploadEnsayoAudio,
+  updateEnsayoAudio,
+  deleteEnsayoAudio,
+  listOrquestaItems,
+  uploadOrquestaItem,
+  updateOrquestaItem,
+  deleteOrquestaItem,
+  resetMemberPassword,
+  changeOwnPassword,
 } from './firebase.js';
 
 // Repertorio de un coro de Carnaval de Cádiz. Los cuplés y los estribillos se
@@ -32,6 +42,7 @@ const KIND_LABELS = {
   cuple: 'Cuplé',
   estribillo: 'Estribillo',
   popurri: 'Popurrí',
+  falseta: 'Falseta',
 };
 const SECTIONS = [
   { title: 'Presentación', kinds: ['presentacion'] },
@@ -56,7 +67,21 @@ const ROLE_META = {
   pendiente: { label: 'Pendiente', color: 'var(--neutral-500)', border: 'var(--neutral-700)' },
   rechazado: { label: 'Rechazado', color: '#ff8a80', border: 'rgba(176,0,32,0.4)' },
 };
-const VOICE_OPTIONS = ['Tenor', 'Segunda', 'Bajo', 'Tercera'];
+const VOICE_OPTIONS = ['Tenor mujer', 'Tenor contraalto mujer', 'Segunda mujer', 'Tenor hombre', 'Segunda hombre', 'Bajos', 'Orquesta'];
+// Voces de coro: las que tienen audios en el Local del Ensayo (Orquesta no).
+const ENSAYO_VOICES = VOICE_OPTIONS.filter((v) => v !== 'Orquesta');
+const ORQUESTA_VOICE = 'Orquesta';
+const ORQUESTA_MSG = '¿Tu tienes Puas o las uñas largas? Pues aquí no es, vuelve a estudiar las letras que te coge el toro!! 🤣';
+
+// Un componente puede llevar varias voces a la vez (p. ej. Tenor + Tenor
+// contraalto). "voices" es el array real; "voice" (singular) es el campo
+// antiguo, leído como respaldo en fichas que aún no se han vuelto a guardar
+// desde que existe la asignación múltiple — ver su gemela en firebase.js.
+function memberVoices(member) {
+  if (!member) return [];
+  if (Array.isArray(member.voices)) return member.voices;
+  return member.voice ? [member.voice] : [];
+}
 const ROLE_OPTIONS = ['corista', 'director', 'admin'];
 
 function kindIndex(kind) {
@@ -71,6 +96,10 @@ function audioTypeLabel(type) {
 const state = {
   songs: [],
   avisos: [],
+  ensayo: [],
+  ensayoFolder: null,
+  orquesta: [],
+  orquestaFolder: null,
   members: [],
   screen: 'login',
   searchQuery: '',
@@ -96,6 +125,7 @@ const el = {
   loginEmail: document.getElementById('login-email'),
   loginPassword: document.getElementById('login-password'),
   loginSubmit: document.getElementById('login-submit'),
+  loginForgot: document.getElementById('login-forgot'),
   loginPedir: document.getElementById('login-pedir'),
   loginError: document.getElementById('login-error'),
 
@@ -135,6 +165,10 @@ const el = {
 
   libretoView: document.getElementById('libreto-view'),
   audiosView: document.getElementById('audios-view'),
+  ensayoView: document.getElementById('ensayo-view'),
+  orquestaView: document.getElementById('orquesta-view'),
+  perfilView: document.getElementById('perfil-view'),
+  drawerEnsayoItem: document.getElementById('drawer-ensayo-item'),
   audiosList: document.getElementById('audios-list'),
 
   letraView: document.getElementById('letra-view'),
@@ -150,6 +184,9 @@ const el = {
   directorRequestsCount: document.getElementById('director-requests-count'),
   directorAvisosHistory: document.getElementById('director-avisos-history'),
   directorMembers: document.getElementById('director-members'),
+  directorRemoved: document.getElementById('director-removed'),
+  directorRemovedCount: document.getElementById('director-removed-count'),
+  directorInvitar: document.getElementById('director-invitar'),
 
   adminView: document.getElementById('admin-view'),
   adminStatMembers: document.getElementById('admin-stat-members'),
@@ -178,8 +215,7 @@ const el = {
   avisoFormError: document.getElementById('aviso-form-error'),
   avisoModalCancel: document.getElementById('aviso-modal-cancel'),
   avisoModalSave: document.getElementById('aviso-modal-save'),
-  directorCrearNotificacion: document.getElementById('director-crear-notificacion'),
-  directorCrearAviso: document.getElementById('director-crear-aviso'),
+  directorCrearTimbrazo: document.getElementById('director-crear-timbrazo'),
   adminInvitar: document.getElementById('admin-invitar'),
 
   rehearsalToggle: document.getElementById('rehearsal-toggle'),
@@ -194,6 +230,7 @@ const el = {
   playerPlayPause: document.getElementById('player-playpause'),
   playerNext: document.getElementById('player-next'),
   playerLoop: document.getElementById('player-loop'),
+  playerClose: document.getElementById('player-close'),
   playerTitle: document.getElementById('player-title'),
   playerSeek: document.getElementById('player-seek'),
   playerCurrentTime: document.getElementById('player-current-time'),
@@ -221,6 +258,7 @@ function applyMemberChrome(member) {
   el.inicioGreeting.textContent = member.name ? `Bienvenido, ${member.name}` : 'Bienvenido';
   el.drawerDirectorItem.classList.toggle('hidden', member.role !== 'director' && member.role !== 'admin');
   el.drawerAdminItem.classList.toggle('hidden', member.role !== 'admin');
+  el.drawerEnsayoItem.classList.toggle('hidden', isOrquestaMember() && !hasEnsayoVoice());
 }
 
 // Punto central de enrutado según el estado real de sesión de Firebase Auth:
@@ -246,7 +284,9 @@ async function handleAuthChange(user) {
   }
 
   applyMemberChrome(member);
-  const tasks = [refreshSongs(), refreshAvisos()];
+  state.ensayoFolder = null;
+  state.orquestaFolder = null;
+  const tasks = [refreshSongs(), refreshAvisos(), refreshEnsayo(), refreshOrquesta()];
   if (member.role === 'director' || member.role === 'admin') {
     tasks.push(refreshMembers());
   }
@@ -339,6 +379,24 @@ async function refreshSongs() {
   }
 }
 
+async function refreshEnsayo() {
+  try {
+    state.ensayo = await listEnsayoAudios(state.currentMember);
+  } catch (err) {
+    console.error(err);
+    state.ensayo = [];
+  }
+}
+
+async function refreshOrquesta() {
+  try {
+    state.orquesta = await listOrquestaItems(state.currentMember);
+  } catch (err) {
+    console.error(err);
+    state.orquesta = [];
+  }
+}
+
 async function refreshAvisos() {
   try {
     state.avisos = await listAvisos();
@@ -351,8 +409,465 @@ function render() {
   renderInicio();
   renderSectioned(el.libretoView, 'libreto');
   renderSectioned(el.audiosList, 'audios');
+  renderEnsayo();
+  renderOrquesta();
+  renderPerfil();
   renderDirector();
   renderAdmin();
+}
+
+/* ══════════════════════════ Local del Ensayo ══════════════════════════ */
+// Una carpeta por pieza; dentro, los audios agrupados por voz. Un corista solo
+// recibe (y por tanto solo ve) los de su voz; director/admin ven y gestionan todos.
+
+const ENSAYO_PIECES = ['presentacion', 'tango', 'cuple', 'estribillo', 'popurri'];
+
+// Corista con la voz Orquesta entre las suyas (director/admin ven ambos
+// apartados siempre, sin necesidad de tener la voz asignada).
+function isOrquestaMember() {
+  const m = state.currentMember;
+  return !!m && m.role === 'corista' && memberVoices(m).includes(ORQUESTA_VOICE);
+}
+
+// Un corista que SOLO lleva Orquesta no tiene nada que hacer en el Local del
+// Ensayo; si además lleva alguna voz de coro, sigue viendo ambos apartados.
+function hasEnsayoVoice() {
+  return memberVoices(state.currentMember).some((v) => v !== ORQUESTA_VOICE);
+}
+
+function canSeeOrquesta() {
+  return isDirectorRole() || isOrquestaMember();
+}
+
+function isDirectorRole() {
+  const role = state.currentMember?.role;
+  return role === 'director' || role === 'admin';
+}
+
+function isAdminRole() {
+  return state.currentMember?.role === 'admin';
+}
+
+function pauseEnsayoAudios(except) {
+  [...el.ensayoView.querySelectorAll('audio'), ...el.orquestaView.querySelectorAll('audio, video')].forEach((a) => {
+    if (a !== except) a.pause();
+  });
+}
+
+function compareEnsayo(a, b) {
+  const va = VOICE_OPTIONS.indexOf(a.voice);
+  const vb = VOICE_OPTIONS.indexOf(b.voice);
+  if (va !== vb) return va - vb;
+  if ((a.number || 0) !== (b.number || 0)) return (a.number || 0) - (b.number || 0);
+  return (a.title || '').localeCompare(b.title || '', 'es');
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderEnsayo() {
+  const view = el.ensayoView;
+  view.innerHTML = '';
+  const member = state.currentMember;
+  if (!member) return;
+  const director = isDirectorRole();
+
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  view.appendChild(head);
+
+  const myEnsayoVoices = memberVoices(member).filter((v) => v !== ORQUESTA_VOICE);
+  if (!state.ensayoFolder) {
+    const sub = director
+      ? 'Audios de ensayo por pieza y por voz.'
+      : myEnsayoVoices.length
+        ? `Tus audios de ensayo · ${escapeHtml(myEnsayoVoices.join(', '))}`
+        : 'Aún no tienes voz asignada: pídesela a dirección para ver tus audios.';
+    head.innerHTML = `<h1>Local del Ensayo</h1><p>${sub}</p>`;
+    const list = document.createElement('div');
+    list.className = 'ensayo-folders';
+    ENSAYO_PIECES.forEach((piece) => {
+      const count = state.ensayo.filter((a) => a.piece === piece).length;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ensayo-folder';
+      btn.innerHTML = `<i class="fa-solid fa-folder"></i><span class="name">${KIND_LABELS[piece]}</span><span class="count">${count}</span>`;
+      btn.addEventListener('click', () => {
+        state.ensayoFolder = piece;
+        renderEnsayo();
+        window.scrollTo(0, 0);
+      });
+      list.appendChild(btn);
+    });
+    view.appendChild(list);
+    return;
+  }
+
+  const piece = state.ensayoFolder;
+  head.innerHTML = `<button class="btn btn-ghost" id="ensayo-back">&larr; Carpetas</button>
+    <h1 style="margin-top:var(--space-4)">${KIND_LABELS[piece]}</h1>`;
+  head.querySelector('#ensayo-back').addEventListener('click', () => {
+    pauseEnsayoAudios();
+    state.ensayoFolder = null;
+    renderEnsayo();
+  });
+
+  if (director) view.appendChild(buildEnsayoUpload(piece));
+
+  const items = state.ensayo.filter((a) => a.piece === piece).sort(compareEnsayo);
+  const body = document.createElement('div');
+  body.className = 'ensayo-list';
+  if (!items.length) {
+    const msg = director || myEnsayoVoices.length ? 'Todavía no hay audios en esta carpeta.' : 'Aún no tienes voz asignada.';
+    body.innerHTML = `<div class="empty-state">${msg}</div>`;
+  }
+  let lastVoice = null;
+  items.forEach((item) => {
+    if (item.voice !== lastVoice) {
+      lastVoice = item.voice;
+      const h = document.createElement('h2');
+      h.className = 'kind-section-title';
+      h.textContent = item.voice;
+      body.appendChild(h);
+    }
+    body.appendChild(buildEnsayoRow(item, director));
+  });
+  view.appendChild(body);
+}
+
+function buildEnsayoUpload(piece) {
+  const isPopurri = piece === 'popurri';
+  const box = document.createElement('div');
+  box.className = 'ensayo-upload';
+  box.innerHTML = `
+    <div class="field"><span>Voz</span>
+      <select class="ensayo-voice">${ENSAYO_VOICES.map((v) => `<option value="${v}">${v}</option>`).join('')}</select></div>
+    ${isPopurri ? '' : '<div class="field"><span>Nombre (opcional)</span><input type="text" class="ensayo-title" placeholder="Ej. Toda la pieza" /></div>'}
+    <button type="button" class="btn btn-gold ensayo-upload-btn">${isPopurri ? 'Subir cuarteta' : 'Subir audio'}</button>
+    <input type="file" class="audio-file-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" />`;
+  const file = box.querySelector('input[type=file]');
+  const btn = box.querySelector('.ensayo-upload-btn');
+  btn.addEventListener('click', () => file.click());
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (!f) return;
+    const voice = box.querySelector('.ensayo-voice').value;
+    const titleInput = box.querySelector('.ensayo-title');
+    let title = titleInput ? titleInput.value.trim() : '';
+    let number = null;
+    if (isPopurri) {
+      number = state.ensayo
+        .filter((a) => a.piece === 'popurri' && a.voice === voice)
+        .reduce((max, a) => Math.max(max, a.number || 0), 0) + 1;
+      title = `Cuarteta ${number}`;
+    }
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Subiendo…';
+    try {
+      await uploadEnsayoAudio({ piece, voice, title, number, file: f });
+      await refreshEnsayo();
+      renderEnsayo();
+    } catch (err) {
+      console.error(err);
+      window.alert(`No se ha podido subir el audio (${err.code || err.message || 'error desconocido'}).`);
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+    file.value = '';
+  });
+  return box;
+}
+
+function buildEnsayoRow(item, director) {
+  const row = document.createElement('div');
+  row.className = 'ensayo-row';
+  const voiceOptions = ENSAYO_VOICES.map((v) => `<option value="${v}" ${item.voice === v ? 'selected' : ''}>${v}</option>`).join('');
+  row.innerHTML = `
+    <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
+    <audio controls preload="none" src="${escapeHtml(item.url)}"></audio>
+    ${director ? `<div class="ensayo-row-actions">
+      <select class="ensayo-voice-edit">${voiceOptions}</select>
+      <button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
+      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
+    </div>` : ''}`;
+  row.querySelector('audio').addEventListener('play', (e) => {
+    pauseEnsayoAudios(e.target);
+    if (!el.audioEl.paused) el.audioEl.pause();
+  });
+  if (director) {
+    const act = async (fn, msg) => {
+      try {
+        await fn();
+        await refreshEnsayo();
+        renderEnsayo();
+      } catch (err) {
+        console.error(err);
+        window.alert(msg);
+      }
+    };
+    row.querySelector('.ensayo-voice-edit').addEventListener('change', (e) =>
+      act(() => updateEnsayoAudio(item.id, { voice: e.target.value }), 'No se ha podido cambiar la voz.'));
+    row.querySelector('.rename').addEventListener('click', () => {
+      const title = window.prompt('Nuevo nombre:', item.title || '');
+      if (title === null) return;
+      act(() => updateEnsayoAudio(item.id, { title: title.trim() }), 'No se ha podido renombrar.');
+    });
+    row.querySelector('.delete').addEventListener('click', () => {
+      if (!window.confirm(`¿Eliminar «${item.title || 'este audio'}»?`)) return;
+      act(() => deleteEnsayoAudio(item), 'No se ha podido eliminar.');
+    });
+  }
+  return row;
+}
+
+/* ══════════════════════════ Orquesta ══════════════════════════ */
+// Audios y vídeos solo de la orquesta, en carpetas por pieza. Los coristas no
+// entran: al pulsar les sale el mensaje de ORQUESTA_MSG.
+
+const ORQUESTA_PIECES = ['presentacion', 'falseta', 'tango', 'cuple', 'estribillo', 'popurri'];
+
+function compareOrquesta(a, b) {
+  if ((a.number || 0) !== (b.number || 0)) return (a.number || 0) - (b.number || 0);
+  return (a.title || '').localeCompare(b.title || '', 'es');
+}
+
+function renderOrquesta() {
+  const view = el.orquestaView;
+  view.innerHTML = '';
+  const member = state.currentMember;
+  if (!member || !canSeeOrquesta()) return;
+  const director = isDirectorRole();
+
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  view.appendChild(head);
+
+  if (!state.orquestaFolder) {
+    head.innerHTML = '<h1>Orquesta</h1><p>Audios y vídeos de la orquesta por pieza.</p>';
+    const list = document.createElement('div');
+    list.className = 'ensayo-folders';
+    ORQUESTA_PIECES.forEach((piece) => {
+      const count = state.orquesta.filter((a) => a.piece === piece).length;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ensayo-folder';
+      btn.innerHTML = `<i class="fa-solid fa-folder"></i><span class="name">${KIND_LABELS[piece]}</span><span class="count">${count}</span>`;
+      btn.addEventListener('click', () => {
+        state.orquestaFolder = piece;
+        renderOrquesta();
+        window.scrollTo(0, 0);
+      });
+      list.appendChild(btn);
+    });
+    view.appendChild(list);
+    return;
+  }
+
+  const piece = state.orquestaFolder;
+  head.innerHTML = `<button class="btn btn-ghost" id="orquesta-back">&larr; Carpetas</button>
+    <h1 style="margin-top:var(--space-4)">${KIND_LABELS[piece]}</h1>`;
+  head.querySelector('#orquesta-back').addEventListener('click', () => {
+    pauseEnsayoAudios();
+    state.orquestaFolder = null;
+    renderOrquesta();
+  });
+
+  if (director) view.appendChild(buildOrquestaUpload(piece));
+
+  const items = state.orquesta.filter((a) => a.piece === piece).sort(compareOrquesta);
+  const body = document.createElement('div');
+  body.className = 'ensayo-list';
+  if (!items.length) body.innerHTML = '<div class="empty-state">Todavía no hay nada en esta carpeta.</div>';
+  items.forEach((item) => body.appendChild(buildOrquestaRow(item, director)));
+  view.appendChild(body);
+}
+
+function buildOrquestaUpload(piece) {
+  const isPopurri = piece === 'popurri';
+  const box = document.createElement('div');
+  box.className = 'ensayo-upload';
+  box.innerHTML = `
+    ${isPopurri ? '' : '<div class="field"><span>Nombre (opcional)</span><input type="text" class="ensayo-title" placeholder="Ej. Toda la pieza" /></div>'}
+    <button type="button" class="btn btn-gold ensayo-upload-btn">${isPopurri ? 'Subir cuarteta' : 'Subir audio o vídeo'}</button>
+    <input type="file" class="audio-file-input" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm" />`;
+  const file = box.querySelector('input[type=file]');
+  const btn = box.querySelector('.ensayo-upload-btn');
+  btn.addEventListener('click', () => file.click());
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (!f) return;
+    const titleInput = box.querySelector('.ensayo-title');
+    let title = titleInput ? titleInput.value.trim() : '';
+    let number = null;
+    if (isPopurri) {
+      number = state.orquesta
+        .filter((a) => a.piece === 'popurri')
+        .reduce((max, a) => Math.max(max, a.number || 0), 0) + 1;
+      title = `Cuarteta ${number}`;
+    }
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Subiendo…';
+    try {
+      await uploadOrquestaItem({ piece, title, number, file: f });
+      await refreshOrquesta();
+      renderOrquesta();
+    } catch (err) {
+      console.error(err);
+      window.alert(`No se ha podido subir el archivo (${err.code || err.message || 'error desconocido'}).`);
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+    file.value = '';
+  });
+  return box;
+}
+
+function buildOrquestaRow(item, director) {
+  const row = document.createElement('div');
+  row.className = 'ensayo-row';
+  const media = item.media === 'video'
+    ? `<video controls playsinline preload="metadata" src="${escapeHtml(item.url)}"></video>`
+    : `<audio controls preload="none" src="${escapeHtml(item.url)}"></audio>`;
+  row.innerHTML = `
+    <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
+    ${media}
+    ${director ? `<div class="ensayo-row-actions">
+      <button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
+      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
+    </div>` : ''}`;
+  row.querySelector('audio, video').addEventListener('play', (e) => {
+    pauseEnsayoAudios(e.target);
+    if (!el.audioEl.paused) el.audioEl.pause();
+  });
+  if (director) {
+    const act = async (fn, msg) => {
+      try {
+        await fn();
+        await refreshOrquesta();
+        renderOrquesta();
+      } catch (err) {
+        console.error(err);
+        window.alert(msg);
+      }
+    };
+    row.querySelector('.rename').addEventListener('click', () => {
+      const title = window.prompt('Nuevo nombre:', item.title || '');
+      if (title === null) return;
+      act(() => updateOrquestaItem(item.id, { title: title.trim() }), 'No se ha podido renombrar.');
+    });
+    row.querySelector('.delete').addEventListener('click', () => {
+      if (!window.confirm(`¿Eliminar «${item.title || 'este archivo'}»?`)) return;
+      act(() => deleteOrquestaItem(item), 'No se ha podido eliminar.');
+    });
+  }
+  return row;
+}
+
+/* ══════════════════════════ Mi perfil ══════════════════════════ */
+// Datos propios + cambio de contraseña (con reautenticación). El admin no ve
+// aquí las contraseñas de nadie más — eso vive en Componentes, como un
+// correo de restablecimiento (ver buildMemberRow).
+
+function renderPerfil() {
+  const view = el.perfilView;
+  view.innerHTML = '';
+  const m = state.currentMember;
+  if (!m) return;
+
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  head.innerHTML = '<h1>Mi perfil</h1><p>Tus datos y tu contraseña.</p>';
+  view.appendChild(head);
+
+  const info = document.createElement('div');
+  info.className = 'ensayo-upload profile-info';
+  info.innerHTML = `
+    <div class="profile-row"><span>Nombre</span><strong>${escapeHtml(m.name || '')}</strong></div>
+    <div class="profile-row"><span>Email</span><strong>${escapeHtml(m.email || '')}</strong></div>
+    <div class="profile-row"><span>Rol</span><strong>${(ROLE_META[m.role] || ROLE_META.pendiente).label}</strong></div>
+    <div class="profile-row"><span>Voz</span><strong>${escapeHtml(memberVoices(m).join(', ') || 'Sin voz asignada')}</strong></div>
+  `;
+  view.appendChild(info);
+
+  const form = document.createElement('div');
+  form.className = 'ensayo-upload';
+  form.innerHTML = `
+    <h2 style="margin:0;font-family:var(--font-heading);font-weight:500;font-size:16px;">Cambiar contraseña</h2>
+    <label class="field">
+      <span>Contraseña actual</span>
+      <div class="password-field">
+        <input type="password" class="profile-current-pw" autocomplete="current-password" />
+        <button type="button" class="password-toggle" data-target-ref="current" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+      </div>
+    </label>
+    <label class="field">
+      <span>Contraseña nueva</span>
+      <div class="password-field">
+        <input type="password" class="profile-new-pw" autocomplete="new-password" placeholder="Mínimo 6 caracteres" />
+        <button type="button" class="password-toggle" data-target-ref="new" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+      </div>
+    </label>
+    <label class="field">
+      <span>Repite la contraseña nueva</span>
+      <div class="password-field">
+        <input type="password" class="profile-new-pw2" autocomplete="new-password" />
+        <button type="button" class="password-toggle" data-target-ref="new2" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+      </div>
+    </label>
+    <div class="auth-error hidden profile-pw-msg"></div>
+    <button type="button" class="btn btn-gold profile-pw-save">Guardar contraseña</button>
+  `;
+  view.appendChild(form);
+
+  const currentInput = form.querySelector('.profile-current-pw');
+  const newInput = form.querySelector('.profile-new-pw');
+  const new2Input = form.querySelector('.profile-new-pw2');
+  const msg = form.querySelector('.profile-pw-msg');
+  form.querySelectorAll('.password-toggle').forEach((btn) => {
+    const input = { current: currentInput, new: newInput, new2: new2Input }[btn.dataset.targetRef];
+    btn.addEventListener('click', () => togglePasswordVisibility(btn, input));
+  });
+
+  form.querySelector('.profile-pw-save').addEventListener('click', async (e) => {
+    msg.classList.add('hidden');
+    const current = currentInput.value;
+    const next = newInput.value;
+    const next2 = new2Input.value;
+    if (!current || !next) {
+      msg.textContent = 'Rellena la contraseña actual y la nueva.';
+      msg.classList.remove('hidden');
+      return;
+    }
+    if (next.length < 6) {
+      msg.textContent = 'La contraseña nueva necesita al menos 6 caracteres.';
+      msg.classList.remove('hidden');
+      return;
+    }
+    if (next !== next2) {
+      msg.textContent = 'Las dos contraseñas nuevas no coinciden.';
+      msg.classList.remove('hidden');
+      return;
+    }
+    e.target.disabled = true;
+    try {
+      await changeOwnPassword(current, next);
+      currentInput.value = '';
+      newInput.value = '';
+      new2Input.value = '';
+      window.alert('Contraseña actualizada.');
+    } catch (err) {
+      const code = err?.code || '';
+      msg.textContent = code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+        ? 'La contraseña actual no es correcta.'
+        : 'No se ha podido cambiar la contraseña. Inténtalo de nuevo.';
+      msg.classList.remove('hidden');
+    } finally {
+      e.target.disabled = false;
+    }
+  });
 }
 
 /* ══════════════════════════ Navegación entre pantallas ══════════════════════════ */
@@ -361,17 +876,54 @@ const SCREEN_ELS = {
   inicio: el.inicioView,
   libreto: el.libretoView,
   audios: el.audiosView,
+  ensayo: el.ensayoView,
+  orquesta: el.orquestaView,
+  perfil: el.perfilView,
   letra: el.letraView,
   director: el.directorView,
   admin: el.adminView,
 };
 // Estas pantallas usan la cabecera compartida (#topbar); director y admin
 // llevan su propia cabecera incrustada.
-const CHROME_SCREENS = new Set(['inicio', 'libreto', 'audios', 'letra']);
+const CHROME_SCREENS = new Set(['inicio', 'libreto', 'audios', 'ensayo', 'orquesta', 'perfil', 'letra']);
 const SEARCH_SCREENS = new Set(['libreto', 'audios']);
 
+function showOrquestaMsg() {
+  const box = document.getElementById('orquesta-msg');
+  const back = document.getElementById('orquesta-msg-backdrop');
+  const close = () => {
+    box.classList.add('hidden');
+    back.classList.add('hidden');
+  };
+  document.getElementById('orquesta-msg-text').textContent = ORQUESTA_MSG;
+  document.getElementById('orquesta-msg-ok').onclick = close;
+  back.onclick = close;
+  box.classList.remove('hidden');
+  back.classList.remove('hidden');
+}
+
 function goScreen(screen) {
+  // Orquesta y Local del Ensayo son excluyentes para coristas.
+  if (screen === 'orquesta' && !canSeeOrquesta()) {
+    closeDrawer();
+    showOrquestaMsg();
+    return;
+  }
+  if (screen === 'ensayo' && isOrquestaMember() && !hasEnsayoVoice()) {
+    closeDrawer();
+    return;
+  }
   state.screen = screen;
+  pauseEnsayoAudios();
+  if (screen === 'inicio') renderRepertoireSummary();
+  if (screen === 'ensayo') {
+    state.ensayoFolder = null;
+    renderEnsayo();
+  }
+  if (screen === 'orquesta') {
+    state.orquestaFolder = null;
+    renderOrquesta();
+  }
   el.screenLogin.classList.add('hidden');
   el.screenPendiente.classList.add('hidden');
   Object.entries(SCREEN_ELS).forEach(([name, elm]) => elm.classList.toggle('hidden', name !== screen));
@@ -407,6 +959,7 @@ function closeDrawer() {
 document.addEventListener('click', (e) => {
   if (e.target.closest('.menu-btn')) openDrawer();
 });
+el.adminAvatar.addEventListener('click', () => goScreen('perfil'));
 el.drawerBackdrop.addEventListener('click', closeDrawer);
 el.drawerNav.addEventListener('click', (e) => {
   const btn = e.target.closest('.drawer-item');
@@ -414,6 +967,20 @@ el.drawerNav.addEventListener('click', (e) => {
   goScreen(btn.dataset.screen);
 });
 el.drawerLogout.addEventListener('click', () => logout());
+
+// Ojo de "mostrar contraseña", reutilizado en login, alta y Mi perfil.
+function togglePasswordVisibility(btn, input) {
+  if (!input) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.innerHTML = `<i class="fa-solid fa-eye${show ? '-slash' : ''}"></i>`;
+  btn.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.password-toggle[data-target]');
+  if (!btn) return;
+  togglePasswordVisibility(btn, document.getElementById(btn.dataset.target));
+});
 
 function showAuthError(elm, err) {
   elm.textContent = authErrorMessage(err);
@@ -451,6 +1018,18 @@ el.loginPedir.addEventListener('click', (e) => {
   el.pendienteStatus.classList.add('hidden');
   goAuthScreen('pendiente');
 });
+el.loginForgot.addEventListener('click', async (e) => {
+  e.preventDefault();
+  el.loginError.classList.add('hidden');
+  const email = el.loginEmail.value.trim() || window.prompt('¿Cuál es tu correo?', '') || '';
+  if (!email.trim()) return;
+  try {
+    await resetMemberPassword(email.trim());
+    window.alert(`Te hemos mandado un correo a ${email.trim()} para que elijas una contraseña nueva.`);
+  } catch (err) {
+    showAuthError(el.loginError, err);
+  }
+});
 el.pendienteFormVolver.addEventListener('click', () => goAuthScreen('login'));
 el.pendienteVolver.addEventListener('click', () => logout());
 
@@ -482,7 +1061,7 @@ function renderInicio() {
   renderRepertoireSummary();
 }
 
-const AVISO_TYPE_LABELS = { notificacion: 'Nueva letra', aviso: 'Urgente' };
+const AVISO_TYPE_LABELS = { notificacion: 'Nueva letra', aviso: 'Timbrazo' };
 
 function formatAvisoDate(aviso) {
   const millis = aviso.createdAt?.toMillis?.();
@@ -558,34 +1137,54 @@ function renderAvisoHistory() {
   if (state.avisos.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Todavía no se ha publicado ninguna notificación ni aviso.';
+    empty.textContent = 'Todavía no se ha publicado ningún timbrazo.';
     el.directorAvisosHistory.appendChild(empty);
     return;
   }
   state.avisos.forEach((aviso) => el.directorAvisosHistory.appendChild(buildAvisoCard(aviso, { editable: true })));
 }
 
+const LAST_LETRA_KEY = 'cil:lastLetra';
+
 function renderRepertoireSummary() {
   el.repertoireList.innerHTML = '';
-  const written = SECTIONS.filter((section) =>
-    state.songs.some((s) => section.kinds.includes(s.kind))
-  ).length;
-  el.repertoireCount.textContent = `${written} de ${SECTIONS.length} con letras`;
+  const picked = state.songs.filter((s) => s.enEnsayo).sort(compareSongs);
+  el.repertoireCount.textContent = picked.length ? `${picked.length} en ensayo` : '';
 
-  SECTIONS.forEach((section, i) => {
-    const hasSongs = state.songs.some((s) => section.kinds.includes(s.kind));
+  if (picked.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = 'Dirección aún no ha marcado canciones para esta semana.';
+    el.repertoireList.appendChild(empty);
+  }
+  picked.forEach((song, i) => {
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = 'repertoire-row' + (hasSongs ? '' : ' is-empty');
-    row.style.setProperty('--card-color', `var(--kind-${section.kinds[0]})`);
+    row.className = 'repertoire-row';
     row.innerHTML = `
       <span class="repertoire-num">${String(i + 1).padStart(2, '0')}</span>
-      <span class="repertoire-title">${section.title.replace(' (con Estribillo)', '')}</span>
-      <span class="repertoire-status">${hasSongs ? 'Disponible' : 'Sin letras todavía'}</span>
+      <span class="repertoire-title"></span>
+      <span class="repertoire-status">Abrir letra</span>
     `;
-    row.addEventListener('click', () => goScreen('libreto'));
+    row.querySelector('.repertoire-title').textContent = song.title;
+    row.addEventListener('click', () => openLetra(song, { allowAudio: false }));
     el.repertoireList.appendChild(row);
   });
+
+  const slot = document.getElementById('continue-slot');
+  slot.innerHTML = '';
+  let lastId = null;
+  try { lastId = localStorage.getItem(LAST_LETRA_KEY); } catch (e) { /* sin almacenamiento */ }
+  const last = state.songs.find((s) => s.id === lastId);
+  if (last) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'continue-link';
+    btn.innerHTML = '<span>Continuar:</span> <strong></strong> <i class="fa-solid fa-arrow-right"></i>';
+    btn.querySelector('strong').textContent = last.title;
+    btn.addEventListener('click', () => openLetra(last, { allowAudio: false }));
+    slot.appendChild(btn);
+  }
 }
 
 /* ══════════════════════════ Libreto / Audios (listas) ══════════════════════════ */
@@ -684,6 +1283,7 @@ function toggleAudioRow(song) {
 function openLetra(song, { allowAudio = true } = {}) {
   state.letraSongId = song.id;
   state.letraAllowAudio = allowAudio;
+  try { localStorage.setItem(LAST_LETRA_KEY, song.id); } catch (e) { /* sin almacenamiento */ }
   el.letraTitle.textContent = song.title;
   renderLetraVoiceRow(song);
   renderLetraLines(song);
@@ -715,6 +1315,7 @@ function renderLetraLines(song) {
     pendingGap = false;
   });
   state.letraLines = lines;
+  state.letraLineOffsets = computeLetraLineOffsets(lines);
   el.letraLines.innerHTML = lines
     .map((l) => `<p class="letra-line${l.gap ? ' gap' : ''}">${l.text}</p>`)
     .join('');
@@ -722,10 +1323,27 @@ function renderLetraLines(song) {
   updateKaraokeHighlight();
 }
 
+// No hay marcas de tiempo reales por verso, así que se aproxima el instante
+// en que empieza cada línea repartiendo la duración según el peso de cada
+// una (nº de caracteres) en vez de a partes iguales — una línea larga tarda
+// más en cantarse que una corta. Los huecos en blanco del libreto (pausas
+// instrumentales/coro) suman un peso extra fijo para no acortarlos a cero.
+const GAP_PAUSE_WEIGHT = 40;
+function computeLetraLineOffsets(lines) {
+  const weights = lines.map((l) => Math.max(l.text.trim().length, 1) + (l.gap ? GAP_PAUSE_WEIGHT : 0));
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  const starts = [];
+  let acc = 0;
+  weights.forEach((w) => {
+    starts.push(acc / total);
+    acc += w;
+  });
+  return starts; // proporción [0..1) en la que empieza cada línea
+}
+
 // Mientras suena el audio de la canción que se está leyendo, resalta la
-// línea correspondiente según la posición real de reproducción (no hay
-// datos de tiempo por verso, así que se reparte el texto a partes iguales
-// sobre la duración total — una aproximación razonable, no exacta).
+// línea cuya proporción de inicio (ver computeLetraLineOffsets) es la más
+// avanzada sin superar la posición real de reproducción.
 function updateKaraokeHighlight() {
   if (state.screen !== 'letra' || !state.letraLines.length) return;
   const children = [...el.letraLines.children];
@@ -734,7 +1352,13 @@ function updateKaraokeHighlight() {
     children.forEach((p) => p.classList.remove('current', 'near'));
     return;
   }
-  const idx = Math.min(children.length - 1, Math.floor((el.audioEl.currentTime / el.audioEl.duration) * children.length));
+  const progress = el.audioEl.currentTime / el.audioEl.duration;
+  const offsets = state.letraLineOffsets || [];
+  let idx = 0;
+  for (let i = 0; i < offsets.length; i++) {
+    if (offsets[i] <= progress) idx = i;
+    else break;
+  }
   children.forEach((p, i) => {
     p.classList.toggle('current', i === idx);
     p.classList.toggle('near', Math.abs(i - idx) === 1);
@@ -783,6 +1407,7 @@ function renderDirector() {
 
   renderAvisoHistory();
   renderDirectorMembers();
+  renderDirectorRemoved();
 }
 
 // Componentes del coro (antes vivía en Administración): nombre editable,
@@ -802,6 +1427,48 @@ function renderDirectorMembers() {
   roster.forEach((m) => el.directorMembers.appendChild(buildMemberRow(m)));
 }
 
+// Eliminados = role 'rechazado' (no se borra el documento): se pueden
+// volver a activar como coristas.
+function renderDirectorRemoved() {
+  if (!el.directorRemoved) return;
+  el.directorRemoved.innerHTML = '';
+  const removed = state.members.filter((m) => m.role === 'rechazado');
+  el.directorRemovedCount.textContent = String(removed.length);
+  if (removed.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No hay coristas eliminados.';
+    el.directorRemoved.appendChild(empty);
+    return;
+  }
+  removed.forEach((m) => {
+    const row = document.createElement('div');
+    row.className = 'member-row-wrap';
+    row.innerHTML = `
+      <div class="member-row">
+        <span class="info">
+          <span class="name-input" style="display:block;"></span>
+          <span class="voice"></span>
+        </span>
+        <button type="button" class="btn btn-primary member-reactivate" style="min-height:32px;font-size:11px;">Activar</button>
+      </div>`;
+    row.querySelector('.name-input').textContent = m.name || '';
+    row.querySelector('.voice').textContent = m.email || memberVoices(m).join(', ') || '';
+    row.querySelector('.member-reactivate').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        await setMemberRole(m.id, 'corista');
+        await refreshMembers();
+        render();
+      } catch (err) {
+        e.target.disabled = false;
+        window.alert('No se ha podido activar.');
+      }
+    });
+    el.directorRemoved.appendChild(row);
+  });
+}
+
 function buildMemberRow(m) {
   const meta = ROLE_META[m.role] || ROLE_META.pendiente;
   const wrap = document.createElement('div');
@@ -810,7 +1477,7 @@ function buildMemberRow(m) {
     <div class="member-row">
       <span class="info">
         <input type="text" class="name-input" value="${m.name || ''}" />
-        <span class="voice">${m.voice || 'Sin voz asignada'}</span>
+        <span class="voice">${memberVoices(m).join(', ') || 'Sin voz asignada'}</span>
       </span>
       <span class="role" style="color:${meta.color};border:1px solid ${meta.border};">${meta.label}</span>
       <button type="button" class="btn btn-ghost member-options-toggle" style="min-height:32px;font-size:11px;">Opciones</button>
@@ -822,13 +1489,16 @@ function buildMemberRow(m) {
           ${ROLE_OPTIONS.map((r) => `<option value="${r}" ${m.role === r ? 'selected' : ''}>${ROLE_META[r].label}</option>`).join('')}
         </select>
       </label>
-      <label class="field">
-        <span>Asignar voz</span>
-        <select class="voice-select">
-          <option value="">Sin voz</option>
-          ${VOICE_OPTIONS.map((v) => `<option value="${v}" ${m.voice === v ? 'selected' : ''}>${v}</option>`).join('')}
-        </select>
-      </label>
+      <div class="field">
+        <span>Asignar voz (puede llevar varias)</span>
+        <div class="voice-checks">
+          ${VOICE_OPTIONS.map((v) => `<label class="voice-check">
+            <input type="checkbox" class="voice-check-input" value="${v}" ${memberVoices(m).includes(v) ? 'checked' : ''} />
+            <span>${v}</span>
+          </label>`).join('')}
+        </div>
+      </div>
+      ${isAdminRole() && m.email ? '<button type="button" class="btn btn-ghost member-reset-pw">Restablecer contraseña</button>' : ''}
       <button type="button" class="btn btn-ghost member-delete">Eliminar del coro</button>
     </div>
   `;
@@ -846,18 +1516,36 @@ function buildMemberRow(m) {
     } catch (err) { /* deja el valor anterior si falla */ }
   });
 
-  wrap.querySelector('.voice-select').addEventListener('change', async (e) => {
+  wrap.querySelectorAll('.voice-check-input').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const voices = [...wrap.querySelectorAll('.voice-check-input:checked')].map((i) => i.value);
+      try {
+        await assignVoices(m.id, voices);
+        await refreshMembers();
+        render();
+      } catch (err) {
+        input.checked = !input.checked; /* deja el valor anterior si falla */
+      }
+    });
+  });
+
+  wrap.querySelector('.member-reset-pw')?.addEventListener('click', async (e) => {
+    if (!window.confirm(`¿Enviar a ${m.email} un correo para que «${m.name}» elija una contraseña nueva?`)) return;
+    e.target.disabled = true;
     try {
-      await assignVoice(m.id, e.target.value || null);
-      await refreshMembers();
-      render();
-    } catch (err) { /* deja el valor anterior si falla */ }
+      await resetMemberPassword(m.email);
+      window.alert('Correo de restablecimiento enviado.');
+    } catch (err) {
+      window.alert('No se ha podido enviar el correo.');
+    } finally {
+      e.target.disabled = false;
+    }
   });
 
   wrap.querySelector('.member-delete').addEventListener('click', async () => {
-    if (!window.confirm(`¿Eliminar a «${m.name}» del coro? Perderá el acceso a la app.`)) return;
+    if (!window.confirm(`¿Eliminar a «${m.name}» del coro? Perderá el acceso a la app y podrás activarlo de nuevo desde «Coristas eliminados».`)) return;
     try {
-      await deleteMember(m.id);
+      await rejectMember(m.id);
       await refreshMembers();
       render();
     } catch (err) {
@@ -922,6 +1610,7 @@ function buildDirectorSongRow(song) {
   row.innerHTML = `
     <span class="title">${song.title}</span>
     <div class="audio-chips"></div>
+    <button class="btn btn-ghost ensayo" style="min-height:32px;font-size:11px;">${song.enEnsayo ? '★ En ensayo' : '☆ Ensayo'}</button>
     <button class="btn btn-ghost edit" style="min-height:32px;font-size:11px;">Editar letra</button>
     <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
   `;
@@ -977,6 +1666,17 @@ function buildDirectorSongRow(song) {
   wrap.appendChild(fileInput);
   chips.appendChild(wrap);
 
+  row.querySelector('.ensayo').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await updateSong(song.id, { enEnsayo: !song.enEnsayo });
+      await refreshSongs();
+      render();
+    } catch (err) {
+      e.target.disabled = false;
+      window.alert('No se ha podido actualizar.');
+    }
+  });
   row.querySelector('.edit').addEventListener('click', () => openSongModal(song));
   row.querySelector('.delete').addEventListener('click', async () => {
     if (!window.confirm(`¿Eliminar «${song.title}» y sus audios?`)) return;
@@ -1087,7 +1787,7 @@ el.songModalSave.addEventListener('click', async () => {
   }
 });
 
-/* ══════════════════════════ Modal: crear notificación/aviso ══════════════════════════ */
+/* ══════════════════════════ Modal: crear timbrazo ══════════════════════════ */
 
 let avisoModalType = 'notificacion';
 let avisoModalEditingId = null;
@@ -1097,8 +1797,8 @@ function openAvisoModal(type, existingAviso = null) {
   avisoModalEditingId = existingAviso ? existingAviso.id : null;
   const isEditing = !!existingAviso;
   el.avisoModalTitle.textContent = isEditing
-    ? (type === 'notificacion' ? 'Editar notificación' : 'Editar aviso')
-    : (type === 'notificacion' ? 'Nueva notificación' : 'Nuevo aviso');
+    ? 'Editar timbrazo'
+    : 'Nuevo timbrazo';
   el.avisoFormTitle.value = existingAviso ? existingAviso.title || '' : '';
   el.avisoFormBody.value = existingAviso ? existingAviso.body || '' : '';
   el.avisoModalSave.textContent = isEditing ? 'Guardar' : 'Publicar';
@@ -1115,7 +1815,7 @@ function closeAvisoModal() {
 
 async function handleDeleteAviso(aviso) {
   const isNotificacion = aviso.type === 'notificacion';
-  if (!window.confirm(`¿Eliminar ${isNotificacion ? 'esta notificación' : 'este aviso'}? Esta acción no se puede deshacer.`)) return;
+  if (!window.confirm(`¿Eliminar ${isNotificacion ? 'esta notificación' : 'este timbrazo'}? Esta acción no se puede deshacer.`)) return;
   try {
     await deleteAviso(aviso.id);
     await refreshAvisos();
@@ -1126,8 +1826,14 @@ async function handleDeleteAviso(aviso) {
   }
 }
 
-if (el.directorCrearNotificacion) el.directorCrearNotificacion.addEventListener('click', () => openAvisoModal('notificacion'));
-if (el.directorCrearAviso) el.directorCrearAviso.addEventListener('click', () => openAvisoModal('aviso'));
+document.querySelectorAll('.director-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.director-tab').forEach((t) => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('.director-group').forEach((g) => g.classList.toggle('hidden', g.dataset.group !== tab.dataset.group));
+  });
+});
+
+if (el.directorCrearTimbrazo) el.directorCrearTimbrazo.addEventListener('click', () => openAvisoModal('aviso'));
 el.avisoModalCancel.addEventListener('click', closeAvisoModal);
 el.avisoModalBackdrop.addEventListener('click', closeAvisoModal);
 
@@ -1213,8 +1919,8 @@ if (el.adminNombrarDirector) {
 // No hay un sistema de invitaciones con código: cualquiera puede pedir
 // entrada desde la app y luego se aprueba desde aquí. "Invitar" copia el
 // enlace del sitio al portapapeles para que sea fácil compartirlo.
-if (el.adminInvitar) {
-  el.adminInvitar.addEventListener('click', async () => {
+for (const btn of [el.adminInvitar, el.directorInvitar]) if (btn) {
+  btn.addEventListener('click', async () => {
     const url = window.location.origin;
     try {
       await navigator.clipboard.writeText(url);
@@ -1364,6 +2070,7 @@ function playPrev() {
   }
 }
 
+el.playerClose.addEventListener('click', stopRehearsal);
 el.playerNext.addEventListener('click', playNext);
 el.playerPrev.addEventListener('click', playPrev);
 

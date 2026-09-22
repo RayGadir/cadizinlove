@@ -43,6 +43,29 @@ service cloud.firestore {
       allow write: if isDirectorOrAdmin();
     }
 
+    // Local del Ensayo: un corista solo lee los audios de alguna de SUS
+    // voces; director y admin leen y gestionan todos. Un componente puede
+    // llevar varias voces a la vez ("voices"); "voice" (singular) es el
+    // campo antiguo, que se sigue leyendo como respaldo en fichas no
+    // migradas todavía.
+    function myVoices() {
+      let m = get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+      return m.voices is list ? m.voices : (m.voice != null ? [m.voice] : []);
+    }
+
+    match /ensayo/{audioId} {
+      allow read: if isDirectorOrAdmin()
+        || (isSignedIn() && resource.data.voice in myVoices() && resource.data.voice != 'Orquesta');
+      allow write: if isDirectorOrAdmin();
+    }
+
+    // Orquesta: audios y vídeos solo para director/admin y quien lleve la
+    // voz "Orquesta" (junto a otras voces o no).
+    match /orquesta/{itemId} {
+      allow read: if isDirectorOrAdmin() || (isSignedIn() && 'Orquesta' in myVoices());
+      allow write: if isDirectorOrAdmin();
+    }
+
     match /avisos/{avisoId} {
       allow read: if isSignedIn();
       allow write: if isDirectorOrAdmin();

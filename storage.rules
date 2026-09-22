@@ -16,5 +16,16 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
+    // Local del Ensayo (audios por voz). Los enlaces de descarga llevan un
+    // token largo e inadivinable; quién ve cada audio lo decide Firestore.
+    match /ensayo/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    // Orquesta (audios y vídeos); quién los ve lo decide Firestore.
+    match /orquesta/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
   }
 }
