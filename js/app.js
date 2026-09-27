@@ -919,10 +919,15 @@ function goScreen(screen) {
   if (screen === 'ensayo') {
     state.ensayoFolder = null;
     renderEnsayo();
+    // El listado se carga una vez al iniciar sesión (ver handleAuthChange);
+    // sin este refresco, una sesión abierta desde antes de que se suba un
+    // audio nuevo se queda con la lista vieja hasta recargar la página.
+    refreshEnsayo().then(() => { if (state.screen === 'ensayo') renderEnsayo(); });
   }
   if (screen === 'orquesta') {
     state.orquestaFolder = null;
     renderOrquesta();
+    refreshOrquesta().then(() => { if (state.screen === 'orquesta') renderOrquesta(); });
   }
   el.screenLogin.classList.add('hidden');
   el.screenPendiente.classList.add('hidden');
