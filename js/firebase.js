@@ -257,8 +257,10 @@ export function deleteAviso(id) {
 /* ══════════════════════════ Local del Ensayo (audios por voz) ══════════════════════════ */
 // Cada documento es un audio de una pieza (presentacion, tango, cuple,
 // estribillo, popurri) asignado a UNA voz. Los directores/admin lo ven todo;
-// un corista solo recibe los de su voz (lo hacen cumplir las reglas de
-// Firestore: la consulta ha de filtrar por su voz o Firestore la rechaza).
+// un corista solo consulta los de su voz — este filtro lo aplica la propia
+// consulta, no las reglas de Firestore (que solo exigen sesión iniciada;
+// ver el comentario en firestore.rules sobre por qué no se filtra por voz
+// ahí también).
 
 export async function listEnsayoAudios(member) {
   const col = collection(db, ENSAYO_COLLECTION);
@@ -298,8 +300,9 @@ export async function deleteEnsayoAudio(item) {
 }
 
 /* ══════════════════════════ Orquesta (audios y vídeos) ══════════════════════════ */
-// Solo director/admin y quien tenga la voz "Orquesta" pueden leer esta
-// colección (lo hacen cumplir las reglas de Firestore).
+// Solo director/admin y quien tenga la voz "Orquesta" consultan esta
+// colección — lo hace cumplir este código, no las reglas de Firestore
+// (ver el comentario en firestore.rules).
 
 export async function listOrquestaItems(member) {
   const isStaff = member.role === 'director' || member.role === 'admin';
