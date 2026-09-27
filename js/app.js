@@ -379,6 +379,20 @@ async function refreshSongs() {
   }
 }
 
+// Igual que el listado de audios, la ficha del propio miembro (con su voz)
+// se carga una sola vez al iniciar sesión (handleAuthChange) — si a alguien
+// le asignan/cambian la voz mientras ya tiene la app abierta, se queda con
+// la voz vieja hasta recargar. Se refresca antes de leer Ensayo/Orquesta.
+async function refreshCurrentMember() {
+  if (!state.currentUser) return;
+  try {
+    const member = await getMember(state.currentUser.uid);
+    if (member) state.currentMember = member;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 async function refreshEnsayo() {
   try {
     state.ensayo = await listEnsayoAudios(state.currentMember);
@@ -919,15 +933,12 @@ function goScreen(screen) {
   if (screen === 'ensayo') {
     state.ensayoFolder = null;
     renderEnsayo();
-    // El listado se carga una vez al iniciar sesión (ver handleAuthChange);
-    // sin este refresco, una sesión abierta desde antes de que se suba un
-    // audio nuevo se queda con la lista vieja hasta recargar la página.
-    refreshEnsayo().then(() => { if (state.screen === 'ensayo') renderEnsayo(); });
+    refreshCurrentMember().then(refreshEnsayo).then(() => { if (state.screen === 'ensayo') renderEnsayo(); });
   }
   if (screen === 'orquesta') {
     state.orquestaFolder = null;
     renderOrquesta();
-    refreshOrquesta().then(() => { if (state.screen === 'orquesta') renderOrquesta(); });
+    refreshCurrentMember().then(refreshOrquesta).then(() => { if (state.screen === 'orquesta') renderOrquesta(); });
   }
   el.screenLogin.classList.add('hidden');
   el.screenPendiente.classList.add('hidden');
