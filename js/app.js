@@ -98,8 +98,10 @@ const state = {
   avisos: [],
   ensayo: [],
   ensayoFolder: null,
+  ensayoError: null,
   orquesta: [],
   orquestaFolder: null,
+  orquestaError: null,
   members: [],
   screen: 'login',
   searchQuery: '',
@@ -396,18 +398,22 @@ async function refreshCurrentMember() {
 async function refreshEnsayo() {
   try {
     state.ensayo = await listEnsayoAudios(state.currentMember);
+    state.ensayoError = null;
   } catch (err) {
     console.error(err);
     state.ensayo = [];
+    state.ensayoError = err.code || err.message || 'error desconocido';
   }
 }
 
 async function refreshOrquesta() {
   try {
     state.orquesta = await listOrquestaItems(state.currentMember);
+    state.orquestaError = null;
   } catch (err) {
     console.error(err);
     state.orquesta = [];
+    state.orquestaError = err.code || err.message || 'error desconocido';
   }
 }
 
@@ -498,7 +504,8 @@ function renderEnsayo() {
       : myEnsayoVoices.length
         ? `Tus audios de ensayo · ${escapeHtml(myEnsayoVoices.join(', '))}`
         : 'Aún no tienes voz asignada: pídesela a dirección para ver tus audios.';
-    head.innerHTML = `<h1>Local del Ensayo</h1><p>${sub}</p>`;
+    head.innerHTML = `<h1>Local del Ensayo</h1><p>${sub}</p>` +
+      (state.ensayoError ? `<p class="empty-state">No se han podido cargar tus audios (error: ${escapeHtml(state.ensayoError)}). Avisa a dirección con este mensaje.</p>` : '');
     const list = document.createElement('div');
     list.className = 'ensayo-folders';
     ENSAYO_PIECES.forEach((piece) => {
@@ -659,7 +666,8 @@ function renderOrquesta() {
   view.appendChild(head);
 
   if (!state.orquestaFolder) {
-    head.innerHTML = '<h1>Orquesta</h1><p>Audios y vídeos de la orquesta por pieza.</p>';
+    head.innerHTML = '<h1>Orquesta</h1><p>Audios y vídeos de la orquesta por pieza.</p>' +
+      (state.orquestaError ? `<p class="empty-state">No se han podido cargar los audios/vídeos (error: ${escapeHtml(state.orquestaError)}). Avisa a dirección con este mensaje.</p>` : '');
     const list = document.createElement('div');
     list.className = 'ensayo-folders';
     ORQUESTA_PIECES.forEach((piece) => {

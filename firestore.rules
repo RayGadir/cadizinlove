@@ -17,8 +17,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Una sola lectura del propio documento, reutilizada por myRole() y
+    // myVoices() — antes cada una hacía su propio get(), duplicando la
+    // lectura en cada evaluación de regla de /ensayo y /orquesta.
+    function myMember() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+    }
+
     function myRole() {
-      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role;
+      return myMember().role;
     }
 
     function isDirectorOrAdmin() {
@@ -49,7 +56,7 @@ service cloud.firestore {
     // campo antiguo, que se sigue leyendo como respaldo en fichas no
     // migradas todavía.
     function myVoices() {
-      let m = get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+      let m = myMember();
       return m.voices is list ? m.voices : (m.voice != null ? [m.voice] : []);
     }
 
