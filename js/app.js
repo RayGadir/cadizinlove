@@ -31,6 +31,13 @@ import {
   deleteOrquestaItem,
   resetMemberPassword,
   changeOwnPassword,
+  DEFAULT_FEATURES,
+  getFeatures,
+  setFeatures,
+  listFotos,
+  uploadFoto,
+  deleteFoto,
+  deleteOwnAccount,
 } from './firebase.js';
 
 // Repertorio de un coro de Carnaval de Cádiz. Los cuplés y los estribillos se
@@ -71,6 +78,7 @@ const VOICE_OPTIONS = ['Tenor mujer', 'Tenor contraalto mujer', 'Segunda mujer',
 // Voces de coro: las que tienen audios en el Local del Ensayo (Orquesta no).
 const ENSAYO_VOICES = VOICE_OPTIONS.filter((v) => v !== 'Orquesta');
 const ORQUESTA_VOICE = 'Orquesta';
+const IMPACIENTE_MSG = 'No seas impaciente, ya queda menos para el carnaval, y ahí verás y escucharás todo!!';
 const ORQUESTA_MSG = '¿Tu tienes Puas o las uñas largas? Pues aquí no es, vuelve a estudiar las letras que te coge el toro!! 🤣';
 
 // Un componente puede llevar varias voces a la vez (p. ej. Tenor + Tenor
@@ -116,6 +124,9 @@ const state = {
   letraAllowAudio: true,
   currentUser: null,
   currentMember: null,
+  features: { ...DEFAULT_FEATURES },
+  fotos: [],
+  fotosError: null,
 };
 
 const el = {
@@ -155,6 +166,19 @@ const el = {
   drawerAdminCount: document.getElementById('drawer-admin-count'),
   drawerDirectorItem: document.getElementById('drawer-director-item'),
   drawerAdminItem: document.getElementById('drawer-admin-item'),
+  drawerLibretoItem: document.getElementById('drawer-libreto-item'),
+  drawerAudiosItem: document.getElementById('drawer-audios-item'),
+  drawerOrquestaItem: document.getElementById('drawer-orquesta-item'),
+  drawerInicioItem: document.getElementById('drawer-inicio-item'),
+  weekCard: document.getElementById('week-card'),
+  fotosView: document.getElementById('fotos-view'),
+  fotoViewer: document.getElementById('foto-viewer'),
+  fotoViewerImg: document.getElementById('foto-viewer-img'),
+  fotoViewerMeta: document.getElementById('foto-viewer-meta'),
+  fotoViewerDelete: document.getElementById('foto-viewer-delete'),
+  fotoViewerClose: document.getElementById('foto-viewer-close'),
+  adminLibretoPublico: document.getElementById('admin-libreto-publico'),
+  adminFotosAbierto: document.getElementById('admin-fotos-abierto'),
 
   searchRow: document.getElementById('search-row'),
   searchInput: document.getElementById('search-input'),
@@ -252,49 +276,103 @@ function initials(name) {
 }
 
 // Refleja en la interfaz (avatar, cajón lateral, saludo) el rol real del
-// componente que ha iniciado sesión, leído de su ficha en Firestore.
+// componente que ha iniciado sesión, leído de su ficha en Firestore. Quien
+// aún está "pendiente" ve en el cajón Fotos, Libreto y Audios; Libreto y
+// Audios le sacan un post-it (salvo el Libreto si el admin lo ha abierto).
 function applyMemberChrome(member) {
+  const approved = isApprovedRole();
   el.adminAvatar.textContent = initials(member.name);
   el.adminAvatar.title = member.name || '';
   el.drawerSub.textContent = (ROLE_META[member.role] || ROLE_META.pendiente).label;
   el.inicioGreeting.textContent = member.name ? `Bienvenido, ${member.name}` : 'Bienvenido';
   el.drawerDirectorItem.classList.toggle('hidden', member.role !== 'director' && member.role !== 'admin');
   el.drawerAdminItem.classList.toggle('hidden', member.role !== 'admin');
-  el.drawerEnsayoItem.classList.toggle('hidden', isOrquestaMember() && !hasEnsayoVoice());
+  el.drawerEnsayoItem.classList.toggle('hidden', !approved || (isOrquestaMember() && !hasEnsayoVoice()));
+  el.drawerOrquestaItem.classList.toggle('hidden', !approved);
+  el.drawerInicioItem.classList.toggle('hidden', !approved);
+  el.weekCard.classList.toggle('hidden', !canSeeLibreto());
+}
+
+/* ── Parte pública vs. privada ── */
+// "pendiente" = registrado pero sin aprobar: entra a la app, pero solo a
+// las pantallas públicas. Las reglas de Firestore aplican lo mismo en el
+// servidor (songs/ensayo/orquesta exigen estar aprobado).
+const APPROVED_ROLES = ['corista', 'director', 'admin'];
+const PUBLIC_SCREENS = new Set(['fotos', 'perfil']);
+
+function isApprovedRole() {
+  return APPROVED_ROLES.includes(state.currentMember?.role);
+}
+
+function canSeeLibreto() {
+  return isApprovedRole() || !!state.features.libretoPublico;
+}
+
+function canUploadFotos() {
+  return isApprovedRole() || !!state.features.fotosAbiertoATodos;
+}
+
+function canOpenScreen(screen) {
+  if (isApprovedRole()) return true;
+  if (screen === 'libreto' || screen === 'letra') return canSeeLibreto();
+  return PUBLIC_SCREENS.has(screen);
+}
+
+async function refreshFeatures() {
+  try {
+    state.features = await getFeatures();
+  } catch (err) {
+    console.error(err);
+    state.features = { ...DEFAULT_FEATURES };
+  }
 }
 
 // Punto central de enrutado según el estado real de sesión de Firebase Auth:
-// sin sesión -> login; con sesión pero sin aprobar -> pantalla de espera;
-// aprobado -> la app, con el panel de director/admin visible según el rol.
+// sin sesión -> login; rechazado (o sin ficha) -> pantalla de espera;
+// pendiente -> la app, solo con la parte pública; aprobado -> la app
+// completa, con el panel de director/admin visible según el rol.
+let authSeq = 0;
 async function handleAuthChange(user) {
+  const seq = ++authSeq;
   state.currentUser = user;
   if (!user) {
     state.currentMember = null;
     state.members = [];
+    state.fotos = [];
     stopRehearsal();
+    closeFotoViewer();
     goAuthScreen('login');
     return;
   }
 
   const member = await getMember(user.uid);
+  if (seq !== authSeq) return;
   state.currentMember = member;
 
-  if (!member || member.role === 'pendiente' || member.role === 'rechazado') {
+  if (!member || member.role === 'rechazado') {
     showPendienteStatus(member);
     goAuthScreen('pendiente');
     return;
   }
 
+  await refreshFeatures();
+  if (seq !== authSeq) return;
   applyMemberChrome(member);
   state.ensayoFolder = null;
   state.orquestaFolder = null;
-  const tasks = [refreshSongs(), refreshAvisos(), refreshEnsayo(), refreshOrquesta()];
+  state.songs = [];
+  state.avisos = [];
+  const tasks = [refreshFotos()];
+  if (isApprovedRole()) tasks.push(refreshAvisos());
+  if (canSeeLibreto()) tasks.push(refreshSongs());
+  if (isApprovedRole()) tasks.push(refreshEnsayo(), refreshOrquesta());
   if (member.role === 'director' || member.role === 'admin') {
     tasks.push(refreshMembers());
   }
   await Promise.all(tasks);
+  if (seq !== authSeq) return;
   render();
-  goScreen('inicio');
+  goScreen(isApprovedRole() ? 'inicio' : 'fotos');
 }
 
 function showPendienteStatus(member) {
@@ -431,6 +509,7 @@ function render() {
   renderSectioned(el.audiosList, 'audios');
   renderEnsayo();
   renderOrquesta();
+  renderFotos();
   renderPerfil();
   renderDirector();
   renderAdmin();
@@ -788,6 +867,158 @@ function buildOrquestaRow(item, director) {
   return row;
 }
 
+/* ══════════════════════════ Fotos (álbum, parte pública) ══════════════════════════ */
+// Galería en cuadrícula. Todo el mundo con sesión la ve; subir, según
+// canUploadFotos(). Las fotos se reducen en el propio móvil antes de subir
+// (lado largo máx. 1600 px, JPEG) y se genera además una miniatura de 400 px
+// (~30 KB): la cuadrícula solo descarga miniaturas y la foto grande se baja
+// únicamente al abrirla, para no gastar datos con álbumes grandes.
+
+const FOTO_MAX_SIDE = 1600;
+const FOTO_THUMB_SIDE = 400;
+
+async function refreshFotos() {
+  try {
+    state.fotos = await listFotos();
+    state.fotosError = null;
+  } catch (err) {
+    console.error(err);
+    state.fotos = [];
+    state.fotosError = err.code || err.message || 'error desconocido';
+  }
+}
+
+function canDeleteFoto(foto) {
+  return isDirectorRole() || foto.uploaderUid === state.currentUser?.uid;
+}
+
+function renderFotos() {
+  const view = el.fotosView;
+  view.innerHTML = '';
+  if (!state.currentMember) return;
+
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  head.innerHTML = '<h1>Fotos</h1><p>El álbum del coro.</p>' +
+    (isApprovedRole() ? '' : '<div class="pendiente-banner">Tu solicitud está pendiente de aprobación. Cuando dirección te apruebe verás el resto de la app.</div>') +
+    (state.fotosError ? `<p class="empty-state">No se han podido cargar las fotos (error: ${escapeHtml(state.fotosError)}).</p>` : '');
+  view.appendChild(head);
+
+  if (canUploadFotos()) view.appendChild(buildFotoUpload());
+
+  if (!state.fotos.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Todavía no hay fotos en el álbum.';
+    view.appendChild(empty);
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'fotos-grid';
+  state.fotos.forEach((foto) => {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'foto-tile';
+    tile.innerHTML = `<img loading="lazy" decoding="async" alt="" src="${escapeHtml(foto.thumbUrl || foto.url)}" />`;
+    tile.addEventListener('click', () => openFotoViewer(foto));
+    grid.appendChild(tile);
+  });
+  view.appendChild(grid);
+}
+
+function buildFotoUpload() {
+  const box = document.createElement('div');
+  box.className = 'ensayo-upload fotos-upload';
+  box.innerHTML = `
+    <button type="button" class="btn btn-gold foto-upload-btn"><i class="fa-solid fa-camera"></i> Subir fotos</button>
+    <input type="file" class="audio-file-input" accept="image/*" multiple />`;
+  const file = box.querySelector('input[type=file]');
+  const btn = box.querySelector('.foto-upload-btn');
+  btn.addEventListener('click', () => file.click());
+  file.addEventListener('change', async () => {
+    const files = [...file.files];
+    if (!files.length) return;
+    const label = btn.innerHTML;
+    btn.disabled = true;
+    let failed = 0;
+    for (let i = 0; i < files.length; i++) {
+      btn.textContent = `Subiendo ${i + 1} de ${files.length}…`;
+      try {
+        const { full, thumb } = await prepareFoto(files[i]);
+        await uploadFoto(full, thumb, { uploaderName: state.currentMember?.name });
+      } catch (err) {
+        console.error(err);
+        failed++;
+      }
+    }
+    file.value = '';
+    await refreshFotos();
+    renderFotos();
+    if (failed) window.alert(failed === 1 ? 'No se ha podido subir 1 foto.' : `No se han podido subir ${failed} fotos.`);
+    btn.disabled = false;
+    btn.innerHTML = label;
+  });
+  return box;
+}
+
+// Devuelve la foto reducida y su miniatura (JPEG). Si el navegador no puede
+// decodificar la imagen (p. ej. HEIC en algunos Android), se sube el
+// original tal cual y sin miniatura.
+async function prepareFoto(file) {
+  const baseName = file.name.replace(/\.[^.]+$/, '') || 'foto';
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const full = await resizeToJpeg(bitmap, FOTO_MAX_SIDE, 0.85, `${baseName}.jpg`);
+    const thumb = await resizeToJpeg(bitmap, FOTO_THUMB_SIDE, 0.75, `${baseName}.jpg`);
+    return { full, thumb };
+  } catch (err) {
+    return { full: file, thumb: null };
+  } finally {
+    if (bitmap && bitmap.close) bitmap.close();
+  }
+}
+
+async function resizeToJpeg(bitmap, maxSide, quality, name) {
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  if (!blob) throw new Error('toBlob');
+  return new File([blob], name, { type: 'image/jpeg' });
+}
+
+function openFotoViewer(foto) {
+  el.fotoViewerImg.src = foto.url;
+  el.fotoViewerMeta.textContent = [foto.uploaderName, formatAvisoDate(foto)].filter(Boolean).join(' · ');
+  el.fotoViewerDelete.classList.toggle('hidden', !canDeleteFoto(foto));
+  el.fotoViewerDelete.onclick = async () => {
+    if (!window.confirm('¿Eliminar esta foto del álbum?')) return;
+    el.fotoViewerDelete.disabled = true;
+    try {
+      await deleteFoto(foto);
+      closeFotoViewer();
+      await refreshFotos();
+      renderFotos();
+    } catch (err) {
+      console.error(err);
+      window.alert('No se ha podido eliminar la foto.');
+    } finally {
+      el.fotoViewerDelete.disabled = false;
+    }
+  };
+  el.fotoViewer.classList.remove('hidden');
+}
+
+function closeFotoViewer() {
+  el.fotoViewer.classList.add('hidden');
+  el.fotoViewerImg.removeAttribute('src');
+}
+el.fotoViewerClose.addEventListener('click', closeFotoViewer);
+el.fotoViewer.addEventListener('click', (e) => { if (e.target === el.fotoViewer) closeFotoViewer(); });
+
 /* ══════════════════════════ Mi perfil ══════════════════════════ */
 // Datos propios + cambio de contraseña (con reautenticación). El admin no ve
 // aquí las contraseñas de nadie más — eso vive en Componentes, como un
@@ -843,6 +1074,7 @@ function renderPerfil() {
     <button type="button" class="btn btn-gold profile-pw-save">Guardar contraseña</button>
   `;
   view.appendChild(form);
+  view.appendChild(buildDeleteAccountBox());
 
   const currentInput = form.querySelector('.profile-current-pw');
   const newInput = form.querySelector('.profile-new-pw');
@@ -892,6 +1124,66 @@ function renderPerfil() {
   });
 }
 
+// Borrado de la propia cuenta (lo exigen App Store y Google Play). Oculto
+// tras un botón para que no se pulse sin querer; pide la contraseña porque
+// Firebase exige reautenticarse para borrar una cuenta.
+function buildDeleteAccountBox() {
+  const box = document.createElement('div');
+  box.className = 'ensayo-upload delete-account';
+  box.innerHTML = `
+    <h2 style="margin:0;font-family:var(--font-heading);font-weight:500;font-size:16px;">Eliminar mi cuenta</h2>
+    <p class="delete-account-note">Se borran tu cuenta, tus datos y las fotos que hayas subido. No se puede deshacer.</p>
+    <button type="button" class="btn btn-ghost delete-account-open">Eliminar mi cuenta</button>
+    <div class="delete-account-form hidden">
+      <label class="field">
+        <span>Escribe tu contraseña para confirmar</span>
+        <div class="password-field">
+          <input type="password" class="delete-account-pw" autocomplete="current-password" />
+          <button type="button" class="password-toggle" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+        </div>
+      </label>
+      <div class="auth-error hidden delete-account-msg"></div>
+      <button type="button" class="btn delete-account-confirm">Eliminar definitivamente</button>
+    </div>
+  `;
+  const formEl = box.querySelector('.delete-account-form');
+  const pw = box.querySelector('.delete-account-pw');
+  const msg = box.querySelector('.delete-account-msg');
+  box.querySelector('.delete-account-open').addEventListener('click', (e) => {
+    e.target.classList.add('hidden');
+    formEl.classList.remove('hidden');
+    pw.focus();
+  });
+  box.querySelector('.password-toggle').addEventListener('click', (e) => togglePasswordVisibility(e.currentTarget, pw));
+  box.querySelector('.delete-account-confirm').addEventListener('click', async (e) => {
+    msg.classList.add('hidden');
+    if (!pw.value) {
+      msg.textContent = 'Escribe tu contraseña.';
+      msg.classList.remove('hidden');
+      return;
+    }
+    if (!window.confirm('¿Seguro que quieres eliminar tu cuenta? Se borrarán tus datos y tus fotos, y no se puede deshacer.')) return;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Eliminando…';
+    try {
+      await deleteOwnAccount(pw.value);
+      // deleteUser cierra la sesión: onAuthStateChanged lleva al login.
+      window.alert('Tu cuenta se ha eliminado.');
+    } catch (err) {
+      console.error(err);
+      const code = err?.code || '';
+      msg.textContent = code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+        ? 'La contraseña no es correcta.'
+        : `No se ha podido eliminar la cuenta (${code || err.message || 'error desconocido'}).`;
+      msg.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Eliminar definitivamente';
+    }
+  });
+  return box;
+}
+
 /* ══════════════════════════ Navegación entre pantallas ══════════════════════════ */
 
 const SCREEN_ELS = {
@@ -900,6 +1192,7 @@ const SCREEN_ELS = {
   audios: el.audiosView,
   ensayo: el.ensayoView,
   orquesta: el.orquestaView,
+  fotos: el.fotosView,
   perfil: el.perfilView,
   letra: el.letraView,
   director: el.directorView,
@@ -907,17 +1200,17 @@ const SCREEN_ELS = {
 };
 // Estas pantallas usan la cabecera compartida (#topbar); director y admin
 // llevan su propia cabecera incrustada.
-const CHROME_SCREENS = new Set(['inicio', 'libreto', 'audios', 'ensayo', 'orquesta', 'perfil', 'letra']);
+const CHROME_SCREENS = new Set(['inicio', 'libreto', 'audios', 'ensayo', 'orquesta', 'fotos', 'perfil', 'letra']);
 const SEARCH_SCREENS = new Set(['libreto', 'audios']);
 
-function showOrquestaMsg() {
+function showPostit(text) {
   const box = document.getElementById('orquesta-msg');
   const back = document.getElementById('orquesta-msg-backdrop');
   const close = () => {
     box.classList.add('hidden');
     back.classList.add('hidden');
   };
-  document.getElementById('orquesta-msg-text').textContent = ORQUESTA_MSG;
+  document.getElementById('orquesta-msg-text').textContent = text;
   document.getElementById('orquesta-msg-ok').onclick = close;
   back.onclick = close;
   box.classList.remove('hidden');
@@ -925,10 +1218,16 @@ function showOrquestaMsg() {
 }
 
 function goScreen(screen) {
+  // Quien no está aprobado solo entra en la parte pública.
+  if (!canOpenScreen(screen)) {
+    closeDrawer();
+    if (screen === 'libreto' || screen === 'audios' || screen === 'letra') showPostit(IMPACIENTE_MSG);
+    return;
+  }
   // Orquesta y Local del Ensayo son excluyentes para coristas.
   if (screen === 'orquesta' && !canSeeOrquesta()) {
     closeDrawer();
-    showOrquestaMsg();
+    showPostit(ORQUESTA_MSG);
     return;
   }
   if (screen === 'ensayo' && isOrquestaMember() && !hasEnsayoVoice()) {
@@ -942,6 +1241,20 @@ function goScreen(screen) {
     state.ensayoFolder = null;
     renderEnsayo();
     refreshCurrentMember().then(refreshEnsayo).then(() => { if (state.screen === 'ensayo') renderEnsayo(); });
+  }
+  if (screen === 'fotos') {
+    renderFotos();
+    refreshFotos().then(() => { if (state.screen === 'fotos') renderFotos(); });
+  }
+  if (!isApprovedRole() && screen === 'fotos') {
+    // El admin puede abrir el Libreto o las fotos en cualquier momento: a
+    // quien está pendiente se le refrescan los interruptores al navegar.
+    refreshFeatures().then(async () => {
+      if (canSeeLibreto() && !state.songs.length) await refreshSongs();
+      if (!state.currentMember) return;
+      applyMemberChrome(state.currentMember);
+      if (state.screen === 'fotos') renderFotos();
+    });
   }
   if (screen === 'orquesta') {
     state.orquestaFolder = null;
@@ -1065,7 +1378,10 @@ el.signupSubmit.addEventListener('click', async () => {
   if (!name || !email || !password) return showAuthError(el.signupError, { code: 'auth/missing-password' });
   el.signupSubmit.disabled = true;
   try {
-    await requestAccess({ name, email, password });
+    const user = await requestAccess({ name, email, password });
+    // onAuthStateChanged salta en cuanto se crea la cuenta, antes de que
+    // exista la ficha: se vuelve a enrutar ya con la ficha creada.
+    await handleAuthChange(user);
   } catch (err) {
     showAuthError(el.signupError, err);
   } finally {
@@ -1112,7 +1428,7 @@ function buildAvisoCard(aviso, { clickable = false, editable = false } = {}) {
     <p class="aviso-body">${aviso.body || ''}</p>
     ${aviso.authorName ? `<div class="aviso-signoff">${aviso.authorName}</div>` : ''}
   `;
-  if (clickable && isNotificacion) {
+  if (clickable && isNotificacion && canSeeLibreto()) {
     card.classList.add('clickable');
     card.addEventListener('click', () => goScreen('libreto'));
   }
@@ -1926,11 +2242,34 @@ function renderAdmin() {
     pending.forEach((m) => el.adminRequests.appendChild(buildRequestCard(m)));
   }
 
+  el.adminLibretoPublico.checked = !!state.features.libretoPublico;
+  el.adminFotosAbierto.checked = !!state.features.fotosAbiertoATodos;
+
   el.adminActivity.innerHTML = '';
   const activityEmpty = document.createElement('div');
   activityEmpty.className = 'empty-state';
   activityEmpty.textContent = 'Todavía no hay actividad registrada.';
   el.adminActivity.appendChild(activityEmpty);
+}
+
+// Interruptores de la parte pública (config/features).
+for (const [input, key] of [[el.adminLibretoPublico, 'libretoPublico'], [el.adminFotosAbierto, 'fotosAbiertoATodos']]) {
+  input.addEventListener('change', async () => {
+    const value = input.checked;
+    input.disabled = true;
+    try {
+      await setFeatures({ [key]: value });
+      state.features = { ...state.features, [key]: value };
+      applyMemberChrome(state.currentMember);
+      render();
+    } catch (err) {
+      console.error(err);
+      input.checked = !value;
+      window.alert(`No se ha podido guardar el cambio (${err.code || err.message || 'error desconocido'}).`);
+    } finally {
+      input.disabled = false;
+    }
+  });
 }
 
 // Sin un selector de componentes en el diseño original, se pide el correo

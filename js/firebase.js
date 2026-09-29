@@ -17,6 +17,7 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
+  deleteUser,
 } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js';
 import {
   getFirestore,
@@ -68,6 +69,8 @@ const SONGS_COLLECTION = 'songs';
 const AVISOS_COLLECTION = 'avisos';
 const ENSAYO_COLLECTION = 'ensayo';
 const ORQUESTA_COLLECTION = 'orquesta';
+const FOTOS_COLLECTION = 'fotos';
+const CONFIG_COLLECTION = 'config';
 
 export function watchAuthState(callback) {
   return onAuthStateChanged(auth, callback);
@@ -334,4 +337,86 @@ export function updateOrquestaItem(id, fields) {
 export async function deleteOrquestaItem(item) {
   if (item.path) await deleteObject(ref(storage, item.path)).catch(() => {});
   await deleteDoc(doc(db, ORQUESTA_COLLECTION, item.id));
+}
+
+/* ══════════════════════════ Configuración (parte pública) ══════════════════════════ */
+// Un único documento config/features con los interruptores que el admin
+// cambia desde su panel: libretoPublico (el Libreto lo ven también quienes
+// aún no están aprobados) y fotosAbiertoATodos (cualquiera puede subir fotos).
+// Si el documento no existe todavía, todo está cerrado.
+
+export const DEFAULT_FEATURES = { libretoPublico: false, fotosAbiertoATodos: false };
+
+export async function getFeatures() {
+  const snap = await getDoc(doc(db, CONFIG_COLLECTION, 'features'));
+  return { ...DEFAULT_FEATURES, ...(snap.exists() ? snap.data() : {}) };
+}
+
+export function setFeatures(fields) {
+  return setDoc(doc(db, CONFIG_COLLECTION, 'features'), fields, { merge: true });
+}
+
+/* ══════════════════════════ Fotos (álbum público) ══════════════════════════ */
+// Cualquiera con sesión ve el álbum. Subir: coristas/director/admin (o todo
+// el mundo si fotosAbiertoATodos) — lo hacen cumplir las reglas de Firestore.
+// Borrar: quien la subió, o director/admin.
+
+export async function listFotos() {
+  const snap = await getDocs(query(collection(db, FOTOS_COLLECTION), orderBy('createdAt', 'desc')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// Los archivos se marcan como cacheables un año: una foto nunca cambia
+// (si se sustituye, es otra ruta), así el móvil no la vuelve a descargar.
+const FOTO_CACHE = 'public,max-age=31536000';
+
+async function putFotoFile(path, file) {
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg', cacheControl: FOTO_CACHE });
+  return getDownloadURL(storageRef);
+}
+
+// file = la foto ya reducida; thumb = miniatura para la cuadrícula (puede
+// faltar si el navegador no pudo procesar la imagen — entonces la cuadrícula
+// usa la foto grande).
+export async function uploadFoto(file, thumb, { uploaderName }) {
+  const base = `fotos/${auth.currentUser.uid}/${Date.now()}`;
+  const path = `${base}-${file.name}`;
+  const thumbPath = thumb ? `${base}-thumb-${thumb.name}` : null;
+  const [url, thumbUrl] = await Promise.all([
+    putFotoFile(path, file),
+    thumb ? putFotoFile(thumbPath, thumb) : null,
+  ]);
+  return addDoc(collection(db, FOTOS_COLLECTION), {
+    url,
+    path,
+    thumbUrl,
+    thumbPath,
+    uploaderUid: auth.currentUser.uid,
+    uploaderName: uploaderName || '',
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteFoto(item) {
+  await deleteDoc(doc(db, FOTOS_COLLECTION, item.id));
+  await Promise.all(
+    [item.path, item.thumbPath].filter(Boolean).map((p) => deleteObject(ref(storage, p)).catch(() => {}))
+  );
+}
+
+/* ══════════════════════════ Borrado de la propia cuenta ══════════════════════════ */
+// Exigido por Apple/Google: cualquiera puede borrar su cuenta desde la app.
+// Se borran sus fotos, su ficha de socio y la cuenta de Auth. Firebase pide
+// haber iniciado sesión hace poco para borrar la cuenta, así que primero se
+// reautentica con la contraseña (así, si la contraseña está mal, no se ha
+// borrado nada todavía).
+export async function deleteOwnAccount(password) {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error('no-user');
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  const mine = await getDocs(query(collection(db, FOTOS_COLLECTION), where('uploaderUid', '==', user.uid)));
+  await Promise.all(mine.docs.map((d) => deleteFoto({ id: d.id, ...d.data() })));
+  await deleteDoc(doc(db, MEMBERS_COLLECTION, user.uid)).catch(() => {});
+  await deleteUser(user);
 }

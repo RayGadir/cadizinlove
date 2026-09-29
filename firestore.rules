@@ -9,7 +9,8 @@ rules_version = '2';
 //   componentes, y solo un director o administrador puede modificar
 //   cualquier ficha (aprobar, rechazar, asignar voz, nombrar director).
 // - Un director o administrador puede eliminar una ficha (por ejemplo para
-//   quitar a alguien del coro); nadie puede borrar la suya propia.
+//   quitar a alguien del coro); cada uno puede borrar la suya propia al
+//   eliminar su cuenta.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -32,6 +33,25 @@ service cloud.firestore {
       return isSignedIn() && myRole() in ['director', 'admin'];
     }
 
+    // Componente aprobado del coro. Quien se registra entra como
+    // "pendiente": solo ve la parte pública (Fotos y, si se activa, el
+    // Libreto) — ni el Tablón, ni los audios, ni Ensayo/Orquesta.
+    function isApproved() {
+      return isSignedIn() && myRole() in ['corista', 'director', 'admin'];
+    }
+
+    // Interruptores de la parte pública (config/features), los cambia el
+    // admin desde su panel. Si el documento no existe, todo cerrado.
+    function features() {
+      return exists(/databases/$(database)/documents/config/features)
+        ? get(/databases/$(database)/documents/config/features).data
+        : {};
+    }
+
+    // Estas condiciones solo usan get() sobre documentos fijos (la ficha
+    // propia y config/features), sin compararlas con resource.data — así
+    // sí funcionan en consultas "list" (ver el comentario de /ensayo).
+
     match /members/{memberId} {
       allow get: if isSignedIn() && (request.auth.uid == memberId || isDirectorOrAdmin());
       allow list: if isDirectorOrAdmin();
@@ -42,11 +62,16 @@ service cloud.firestore {
 
       allow update: if isDirectorOrAdmin();
 
-      allow delete: if isDirectorOrAdmin() && request.auth.uid != memberId;
+      // Director/admin borran a otros; cada uno puede borrar la suya propia
+      // (borrado de cuenta desde Mi perfil).
+      allow delete: if (isDirectorOrAdmin() && request.auth.uid != memberId)
+        || (isSignedIn() && request.auth.uid == memberId);
     }
 
+    // El Libreto solo lo leen los aprobados, salvo que el admin lo haya
+    // abierto al público (libretoPublico) de cara al carnaval.
     match /songs/{songId} {
-      allow read: if isSignedIn();
+      allow read: if isApproved() || (isSignedIn() && features().get('libretoPublico', false) == true);
       allow write: if isDirectorOrAdmin();
     }
 
@@ -60,18 +85,37 @@ service cloud.firestore {
     // real solo lo aplica la propia app al consultar/mostrar — aquí basta
     // con exigir sesión iniciada para leer los metadatos.
     match /ensayo/{audioId} {
-      allow read: if isSignedIn();
+      allow read: if isApproved();
       allow write: if isDirectorOrAdmin();
     }
 
     match /orquesta/{itemId} {
-      allow read: if isSignedIn();
+      allow read: if isApproved();
       allow write: if isDirectorOrAdmin();
     }
 
     match /avisos/{avisoId} {
+      allow read: if isApproved();
+      allow write: if isDirectorOrAdmin();
+    }
+
+    match /config/{docId} {
       allow read: if isSignedIn();
       allow write: if isDirectorOrAdmin();
+    }
+
+    // Álbum de fotos: lo ve cualquiera con sesión. Suben los aprobados (o
+    // cualquiera no rechazado si fotosAbiertoATodos), siempre a su nombre.
+    // Borra quien la subió o director/admin.
+    match /fotos/{fotoId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.uploaderUid == request.auth.uid
+        && (isApproved()
+          || (myRole() == 'pendiente' && features().get('fotosAbiertoATodos', false) == true));
+      allow update: if isDirectorOrAdmin();
+      allow delete: if isDirectorOrAdmin()
+        || (isSignedIn() && resource.data.uploaderUid == request.auth.uid);
     }
   }
 }

@@ -82,7 +82,7 @@
             <span class="kicker">Nuevo en el coro</span>
           </div>
           <h1>Pide tu entrada</h1>
-          <p>Con tu nombre, correo y una contraseña creamos tu cuenta. Un director y el administrador tendrán que aprobarte antes de poder entrar.</p>
+          <p>Con tu nombre, correo y una contraseña creamos tu cuenta. Desde ya puedes ver las fotos del coro; el resto se abre cuando un director o el administrador te aprueben.</p>
         </div>
         <div class="login-card" style="background: var(--surface); box-shadow: 0 0 0 1px var(--neutral-800);">
           <label class="field">
@@ -166,11 +166,12 @@
         <span class="sub" id="drawer-sub">Administrador</span>
       </div>
       <div class="drawer-nav" id="drawer-nav">
-        <button class="drawer-item" data-screen="inicio"><span class="stripe"></span>El Tablón</button>
-        <button class="drawer-item" data-screen="libreto"><span class="stripe"></span>Libreto</button>
-        <button class="drawer-item" data-screen="audios"><span class="stripe"></span>Audios</button>
+        <button class="drawer-item" data-screen="inicio" id="drawer-inicio-item"><span class="stripe"></span>El Tablón</button>
+        <button class="drawer-item" data-screen="fotos"><span class="stripe"></span>Fotos</button>
+        <button class="drawer-item" data-screen="libreto" id="drawer-libreto-item"><span class="stripe"></span>Libreto</button>
+        <button class="drawer-item" data-screen="audios" id="drawer-audios-item"><span class="stripe"></span>Audios</button>
         <button class="drawer-item" data-screen="ensayo" id="drawer-ensayo-item"><span class="stripe"></span>Local del Ensayo</button>
-        <button class="drawer-item" data-screen="orquesta"><span class="stripe"></span>Orquesta</button>
+        <button class="drawer-item" data-screen="orquesta" id="drawer-orquesta-item"><span class="stripe"></span>Orquesta</button>
         <button class="drawer-item hidden" data-screen="director" id="drawer-director-item"><span class="stripe"></span>Panel del director</button>
         <button class="drawer-item hidden" data-screen="admin" id="drawer-admin-item"><span class="stripe"></span><span class="fill">Administración</span><span class="count hidden" id="drawer-admin-count"></span></button>
       </div>
@@ -190,7 +191,7 @@
           <p id="inicio-subtitle">Aquí verás los avisos de dirección y las novedades del libreto.</p>
         </div>
         <div id="avisos-list" class="avisos-list"></div>
-        <div class="week-card">
+        <div class="week-card" id="week-card">
           <div class="repertoire-summary">
           <h2>Pa esta semana, o ya estás tu con Monje</h2>
           <span id="repertoire-count"></span>
@@ -216,6 +217,9 @@
 
       <!-- ═══ ORQUESTA (audios y vídeos) ═══ -->
       <section id="orquesta-view" class="screen panel-screen hidden"></section>
+
+      <!-- ═══ FOTOS (álbum, parte pública) ═══ -->
+      <section id="fotos-view" class="screen panel-screen hidden"></section>
 
       <!-- ═══ MI PERFIL ═══ -->
       <section id="perfil-view" class="screen panel-screen hidden"></section>
@@ -312,6 +316,18 @@
           <div class="admin-stat"><span class="n" id="admin-stat-pending">0</span><span class="l">pendientes</span></div>
         </div>
 
+        <div class="section-label"><span class="rule"></span><h2>Parte pública</h2></div>
+        <div class="ensayo-upload public-switches">
+          <label class="switch-row">
+            <span><strong>Libreto público</strong><small>Quien aún no está aprobado también puede leer las letras.</small></span>
+            <input type="checkbox" id="admin-libreto-publico" />
+          </label>
+          <label class="switch-row">
+            <span><strong>Fotos abiertas a todos</strong><small>Quien aún no está aprobado también puede subir fotos.</small></span>
+            <input type="checkbox" id="admin-fotos-abierto" />
+          </label>
+        </div>
+
         <div class="section-label"><span class="rule"></span><h2>Pendientes de tu firma</h2></div>
         <div id="admin-requests" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
 
@@ -394,6 +410,16 @@
     <div class="postit hidden" id="orquesta-msg">
       <p id="orquesta-msg-text"></p>
       <button class="postit-ok" id="orquesta-msg-ok">Aceptar</button>
+    </div>
+
+    <!-- ═══ Visor de fotos ═══ -->
+    <div class="foto-viewer hidden" id="foto-viewer">
+      <button class="foto-viewer-close" id="foto-viewer-close" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+      <img id="foto-viewer-img" alt="" />
+      <div class="foto-viewer-bar">
+        <span id="foto-viewer-meta"></span>
+        <button class="foto-viewer-delete hidden" id="foto-viewer-delete"><i class="fa-solid fa-trash"></i> Eliminar</button>
+      </div>
     </div>
 
     <!-- ═══ Modal: crear timbrazo ═══ -->

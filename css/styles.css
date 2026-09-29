@@ -906,3 +906,63 @@ a:hover { color: var(--accent-200); }
   align-self: flex-end; border: 0; background: #3a3000; color: #ffe94d;
   font: 700 15px var(--font-body, sans-serif); padding: 10px 22px; border-radius: 999px; cursor: pointer;
 }
+
+/* ── Parte pública: aviso para pendientes, álbum de fotos, interruptores ── */
+.pendiente-banner {
+  margin: 0 var(--space-6) var(--space-4); padding: var(--space-4) var(--space-6);
+  background: #ffffff; border-radius: var(--radius-md); border-left: 3px solid var(--gold);
+  box-shadow: 0 0 0 1px var(--neutral-300); color: var(--neutral-700); font-size: 13px; line-height: 1.5;
+}
+.fotos-upload input[type=file] { display: none; }
+.fotos-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  padding: 0 var(--space-6) var(--space-8);
+}
+.foto-tile {
+  aspect-ratio: 1; padding: 0; border: 0; overflow: hidden; cursor: pointer;
+  background: var(--neutral-200); border-radius: var(--radius-sm);
+}
+.foto-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-viewer {
+  position: fixed; inset: 0; z-index: 70; background: rgba(10,10,16,0.94);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4);
+  padding: 56px var(--space-6) var(--space-6);
+}
+.foto-viewer.hidden { display: none; }
+.foto-viewer img { max-width: 100%; max-height: calc(100vh - 150px); object-fit: contain; border-radius: var(--radius-sm); }
+.foto-viewer-close {
+  position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border-radius: 50%;
+  border: 0; background: rgba(255,255,255,0.12); color: #fff; font-size: 18px; cursor: pointer;
+}
+.foto-viewer-bar {
+  width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  color: var(--neutral-300); font-size: 13px;
+}
+.foto-viewer-delete {
+  border: 1px solid rgba(255,138,128,0.5); background: transparent; color: #ff8a80;
+  font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+}
+.foto-viewer-delete.hidden { display: none; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); cursor: pointer; }
+.switch-row span { display: flex; flex-direction: column; gap: 2px; }
+.switch-row strong { font-weight: 500; font-size: 14px; color: var(--neutral-900); }
+.switch-row small { font-size: 12px; color: var(--neutral-600); line-height: 1.4; }
+.switch-row input[type=checkbox] {
+  appearance: none; -webkit-appearance: none; flex: none; width: 44px; height: 26px; margin: 0;
+  border-radius: 999px; background: var(--neutral-300); position: relative; cursor: pointer; transition: background 0.2s;
+}
+.switch-row input[type=checkbox]::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform 0.2s;
+}
+.switch-row input[type=checkbox]:checked { background: var(--gold); }
+.switch-row input[type=checkbox]:checked::after { transform: translateX(18px); }
+.switch-row input[type=checkbox]:disabled { opacity: 0.5; }
+.panel-head .pendiente-banner { margin: var(--space-4) 0 0; }
+
+/* ── Mi perfil: eliminar cuenta ── */
+.delete-account-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--neutral-600); }
+.delete-account-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.delete-account-form.hidden { display: none; }
+.delete-account .delete-account-confirm { color: #b00020; border-color: rgba(176,0,32,0.45); background: transparent; }
+.delete-account .delete-account-confirm:hover { background: rgba(176,0,32,0.06); }
