@@ -1279,13 +1279,62 @@ function buildAudioRow(song) {
       <div class="song-card-title">${song.title}</div>
     </div>
     ${hasAudio
-      ? `<span class="song-card-play btn-icon">${isCurrent && !el.audioEl.paused ? '⏸' : '▶'}</span>`
+      ? `<span class="song-card-play btn-icon">${isCurrent && !el.audioEl.paused ? '⏸' : '▶'}</span>
+         <div class="song-card-more">
+           <button type="button" class="song-card-more-btn" title="Más opciones" aria-label="Más opciones"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+           <div class="song-card-menu hidden">
+             <button type="button" class="song-card-menu-item download"><i class="fa-solid fa-download"></i> Descargar audio</button>
+           </div>
+         </div>`
       : '<span class="song-card-no-audio" title="Todavía no hay audio para esta letra">Sin audio</span>'}
   `;
   if (hasAudio) {
     card.addEventListener('click', () => toggleAudioRow(song));
+    const more = card.querySelector('.song-card-more');
+    const menu = card.querySelector('.song-card-menu');
+    more.addEventListener('click', (e) => e.stopPropagation());
+    more.querySelector('.song-card-more-btn').addEventListener('click', () => {
+      const wasHidden = menu.classList.contains('hidden');
+      closeSongCardMenus();
+      if (wasHidden) menu.classList.remove('hidden');
+    });
+    menu.querySelector('.download').addEventListener('click', (e) => {
+      closeSongCardMenus();
+      downloadSongAudio(song, e.currentTarget);
+    });
   }
   return card;
+}
+
+function closeSongCardMenus() {
+  document.querySelectorAll('.song-card-menu').forEach((m) => m.classList.add('hidden'));
+}
+document.addEventListener('click', closeSongCardMenus);
+
+async function downloadSongAudio(song, btn) {
+  const audio = (song.audios || []).find((a) => a.type === 'grupo') || (song.audios || [])[0];
+  if (!audio || !audio.url) return;
+  const ext = ((audio.path || '').match(/\.([a-z0-9]{2,5})$/i) || [, 'mp3'])[1];
+  const fileName = `${song.title}.${ext}`.replace(/[\\/:*?"<>|]/g, '');
+  btn.disabled = true;
+  try {
+    const res = await fetch(audio.url);
+    if (!res.ok) throw new Error(res.status);
+    const blobUrl = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+  } catch (err) {
+    // Si la descarga directa falla, se abre el audio en otra pestaña
+    // para que se pueda guardar desde el propio navegador.
+    window.open(audio.url, '_blank', 'noopener');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function toggleAudioRow(song) {
