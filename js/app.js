@@ -876,6 +876,8 @@ function buildOrquestaRow(item, director) {
 
 const FOTO_MAX_SIDE = 1600;
 const FOTO_THUMB_SIDE = 400;
+const FOTOS_LIMITE_DIARIO = 25;
+const CARRETE_MSG = '¡Dejad las fotos para mañana, que ya habéis gastado el carrete por hoy!!';
 
 async function refreshFotos() {
   try {
@@ -934,12 +936,24 @@ function buildFotoUpload() {
     <input type="file" class="audio-file-input" accept="image/*" multiple />`;
   const file = box.querySelector('input[type=file]');
   const btn = box.querySelector('.foto-upload-btn');
-  btn.addEventListener('click', () => file.click());
+  btn.addEventListener('click', () => {
+    if (fotosRestantesHoy() <= 0) {
+      showPostit(CARRETE_MSG);
+      return;
+    }
+    file.click();
+  });
   file.addEventListener('change', async () => {
-    const files = [...file.files];
+    let files = [...file.files];
     if (!files.length) return;
     const label = btn.innerHTML;
     btn.disabled = true;
+    // Se vuelve a contar justo antes de subir: otro componente puede haber
+    // subido fotos mientras tanto.
+    await refreshFotos();
+    const restantes = fotosRestantesHoy();
+    const sobran = files.length > restantes;
+    files = files.slice(0, Math.max(0, restantes));
     let failed = 0;
     for (let i = 0; i < files.length; i++) {
       btn.textContent = `Subiendo ${i + 1} de ${files.length}…`;
@@ -955,10 +969,20 @@ function buildFotoUpload() {
     await refreshFotos();
     renderFotos();
     if (failed) window.alert(failed === 1 ? 'No se ha podido subir 1 foto.' : `No se han podido subir ${failed} fotos.`);
+    if (sobran) showPostit(CARRETE_MSG);
     btn.disabled = false;
     btn.innerHTML = label;
   });
   return box;
+}
+
+// Límite provisional: FOTOS_LIMITE_DIARIO fotos al día entre todo el coro
+// (no por persona), contando las subidas desde las 00:00 de hoy.
+function fotosRestantesHoy() {
+  const inicioHoy = new Date();
+  inicioHoy.setHours(0, 0, 0, 0);
+  const subidasHoy = state.fotos.filter((f) => (f.createdAt?.toMillis?.() ?? Date.now()) >= inicioHoy.getTime()).length;
+  return FOTOS_LIMITE_DIARIO - subidasHoy;
 }
 
 // Devuelve la foto reducida y su miniatura (JPEG). Si el navegador no puede
