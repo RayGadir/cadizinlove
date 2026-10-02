@@ -263,6 +263,7 @@ const el = {
   playerDuration: document.getElementById('player-duration'),
   audioEl: document.getElementById('audio-el'),
   bottomBars: document.getElementById('bottom-bars'),
+  offlineBanner: document.getElementById('offline-banner'),
 };
 
 function initials(name) {
@@ -687,12 +688,13 @@ function buildEnsayoRow(item, director) {
   row.innerHTML = `
     <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
     <audio controls preload="none" src="${escapeHtml(item.url)}"></audio>
-    ${director ? `<div class="ensayo-row-actions">
-      <select class="ensayo-voice-edit">${voiceOptions}</select>
+    ${director || isNativeApp() ? `<div class="ensayo-row-actions">
+      ${director ? `<select class="ensayo-voice-edit">${voiceOptions}</select>
       <button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
-      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
+      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>` : ''}
     </div>` : ''}`;
-  row.querySelector('audio').addEventListener('play', (e) => {
+  const audioEl = row.querySelector('audio');
+  audioEl.addEventListener('play', (e) => {
     pauseEnsayoAudios(e.target);
     if (!el.audioEl.paused) el.audioEl.pause();
   });
@@ -719,6 +721,7 @@ function buildEnsayoRow(item, director) {
       act(() => deleteEnsayoAudio(item), 'No se ha podido eliminar.');
     });
   }
+  attachOfflineControl(row.querySelector('.ensayo-row-actions'), item, 'ensayo', audioEl);
   return row;
 }
 
@@ -835,11 +838,12 @@ function buildOrquestaRow(item, director) {
   row.innerHTML = `
     <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
     ${media}
-    ${director ? `<div class="ensayo-row-actions">
-      <button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
-      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
+    ${director || isNativeApp() ? `<div class="ensayo-row-actions">
+      ${director ? `<button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
+      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>` : ''}
     </div>` : ''}`;
-  row.querySelector('audio, video').addEventListener('play', (e) => {
+  const mediaEl = row.querySelector('audio, video');
+  mediaEl.addEventListener('play', (e) => {
     pauseEnsayoAudios(e.target);
     if (!el.audioEl.paused) el.audioEl.pause();
   });
@@ -864,6 +868,7 @@ function buildOrquestaRow(item, director) {
       act(() => deleteOrquestaItem(item), 'No se ha podido eliminar.');
     });
   }
+  attachOfflineControl(row.querySelector('.ensayo-row-actions'), item, 'orquesta', mediaEl);
   return row;
 }
 
@@ -1042,6 +1047,156 @@ function closeFotoViewer() {
 }
 el.fotoViewerClose.addEventListener('click', closeFotoViewer);
 el.fotoViewer.addEventListener('click', (e) => { if (e.target === el.fotoViewer) closeFotoViewer(); });
+
+/* ══════════════════════════ Funciones nativas (app Android/iOS) ══════════════════════════ */
+// Todo esto solo actúa cuando la web corre dentro del wrapper de Capacitor
+// (window.Capacitor presente); en el navegador normal (Netlify) no cambia
+// nada de lo que ya había. Capacitor inyecta su puente incluso cargando una
+// URL remota como esta, así que podemos llamar a sus plugins sin necesidad
+// de empaquetar nada aquí: basta con que el proyecto nativo los tenga
+// instalados y sincronizados (@capacitor/filesystem, @capacitor/network).
+
+function isNativeApp() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+
+/* ── Aviso de "sin conexión" ── */
+function initNetworkBanner() {
+  if (!isNativeApp() || !window.Capacitor.Plugins?.Network) return;
+  const { Network } = window.Capacitor.Plugins;
+  const apply = (status) => el.offlineBanner.classList.toggle('hidden', !!status.connected);
+  Network.getStatus().then(apply).catch(() => {});
+  Network.addListener('networkStatusChange', apply);
+}
+
+/* ── Descarga de audios/vídeos para escuchar sin conexión ──
+   Se guarda un mapa {id: {path, native}} en localStorage; el archivo en sí
+   vive en el almacenamiento privado de la app (directorio "DATA" de
+   Capacitor Filesystem), así que sobrevive a cerrar la app, pero desaparece
+   si se desinstala — es justo lo que queremos, nada de permisos extra. */
+const OFFLINE_MAP_KEY = 'cadizlove_offline_v1';
+
+function loadOfflineMap() {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_MAP_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+function saveOfflineMap(map) {
+  try { localStorage.setItem(OFFLINE_MAP_KEY, JSON.stringify(map)); } catch {}
+}
+function offlineEntry(id) {
+  return loadOfflineMap()[id] || null;
+}
+
+function guessExt(url, mime) {
+  const fromUrl = (url.split('?')[0].match(/\.([a-z0-9]{2,4})$/i) || [])[1];
+  if (fromUrl) return fromUrl.toLowerCase();
+  if (mime && mime.includes('/')) return mime.split('/')[1].split(';')[0];
+  return 'bin';
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Descarga item.url, lo guarda en el dispositivo y apunta el reproductor
+// (audio/video) al archivo local. "kind" es solo para organizar carpetas
+// (ensayo/orquesta).
+async function downloadOfflineItem(item, kind, mediaEl, btn) {
+  const { Filesystem } = window.Capacitor.Plugins;
+  btn.classList.add('is-busy');
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Descargando…';
+  try {
+    const resp = await fetch(item.url);
+    if (!resp.ok) throw new Error('fetch');
+    const blob = await resp.blob();
+    const base64 = await blobToBase64(blob);
+    const path = `offline/${kind}/${item.id}.${guessExt(item.url, blob.type)}`;
+    await Filesystem.writeFile({ path, data: base64, directory: 'DATA', recursive: true });
+    const map = loadOfflineMap();
+    map[item.id] = { path };
+    saveOfflineMap(map);
+    await applyOfflineSrc(item.id, mediaEl);
+    setOfflineBtnState(btn, true);
+  } catch (err) {
+    console.error(err);
+    window.alert('No se ha podido descargar para escuchar sin conexión.');
+    setOfflineBtnState(btn, false);
+  } finally {
+    btn.classList.remove('is-busy');
+  }
+}
+
+async function removeOfflineItem(item, mediaEl, btn) {
+  const { Filesystem } = window.Capacitor.Plugins;
+  const entry = offlineEntry(item.id);
+  btn.classList.add('is-busy');
+  try {
+    if (entry) await Filesystem.deleteFile({ path: entry.path, directory: 'DATA' }).catch(() => {});
+    const map = loadOfflineMap();
+    delete map[item.id];
+    saveOfflineMap(map);
+    mediaEl.src = item.url;
+    setOfflineBtnState(btn, false);
+  } finally {
+    btn.classList.remove('is-busy');
+  }
+}
+
+function setOfflineBtnState(btn, downloaded) {
+  btn.classList.toggle('is-downloaded', downloaded);
+  btn.innerHTML = downloaded
+    ? '<i class="fa-solid fa-circle-check"></i> Descargado'
+    : '<i class="fa-solid fa-cloud-arrow-down"></i> Escuchar sin conexión';
+}
+
+// Si el item ya está descargado, cambia el src del <audio>/<video> al
+// archivo local (convertido a una URL que la WebView sabe cargar). Si el
+// archivo ha desaparecido del dispositivo, se olvida y se queda con el
+// remoto.
+async function applyOfflineSrc(id, mediaEl) {
+  const entry = offlineEntry(id);
+  if (!entry) return false;
+  try {
+    const { Filesystem } = window.Capacitor.Plugins;
+    const { uri } = await Filesystem.getUri({ path: entry.path, directory: 'DATA' });
+    mediaEl.src = window.Capacitor.convertFileSrc(uri);
+    return true;
+  } catch {
+    const map = loadOfflineMap();
+    delete map[id];
+    saveOfflineMap(map);
+    return false;
+  }
+}
+
+// Añade el botón de descarga a una fila de Ensayo/Orquesta y deja el
+// reproductor apuntando al archivo local si ya estaba descargado.
+function attachOfflineControl(container, item, kind, mediaEl) {
+  if (!isNativeApp() || !window.Capacitor.Plugins?.Filesystem) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'offline-btn';
+  const downloaded = !!offlineEntry(item.id);
+  setOfflineBtnState(btn, downloaded);
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('is-downloaded')) {
+      if (!window.confirm('¿Quitar la copia descargada de este audio?')) return;
+      removeOfflineItem(item, mediaEl, btn);
+    } else {
+      downloadOfflineItem(item, kind, mediaEl, btn);
+    }
+  });
+  container.appendChild(btn);
+  if (downloaded) applyOfflineSrc(item.id, mediaEl);
+}
 
 /* ══════════════════════════ Mi perfil ══════════════════════════ */
 // Datos propios + cambio de contraseña (con reautenticación). El admin no ve
@@ -2543,4 +2698,5 @@ el.audioEl.addEventListener('timeupdate', () => {
 syncBottomPadding();
 goAuthScreen('login');
 loadData();
+initNetworkBanner();
 watchAuthState(handleAuthChange);

@@ -182,6 +182,12 @@
       <input type="search" id="search-input" class="search-input" placeholder="Buscar canción..." />
     </div>
 
+    <!-- Solo aparece dentro de la app nativa (Android/iOS), nunca en el navegador. -->
+    <div class="offline-banner hidden" id="offline-banner">
+      <i class="fa-solid fa-wifi"></i>
+      <span>Sin conexión — los audios que hayas descargado siguen sonando.</span>
+    </div>
+
     <main id="main">
       <!-- ═══ INICIO (tema claro) ═══ -->
       <section id="inicio-view" class="screen hidden">
