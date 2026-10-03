@@ -80,6 +80,8 @@ const ENSAYO_VOICES = VOICE_OPTIONS.filter((v) => v !== 'Orquesta');
 const ORQUESTA_VOICE = 'Orquesta';
 const IMPACIENTE_MSG = 'No seas impaciente, ya queda menos para el carnaval, y ahí verás y escucharás todo!!';
 const ORQUESTA_MSG = '¿Tu tienes Puas o las uñas largas? Pues aquí no es, vuelve a estudiar las letras que te coge el toro!! 🤣';
+// Tarjeta "Pa esta semana, o ya estás tu con Monje" en Inicio — desactivada por ahora.
+const WEEK_CARD_ENABLED = false;
 
 // Un componente puede llevar varias voces a la vez (p. ej. Tenor + Tenor
 // contraalto). "voices" es el array real; "voice" (singular) es el campo
@@ -291,7 +293,7 @@ function applyMemberChrome(member) {
   el.drawerEnsayoItem.classList.toggle('hidden', !approved || (isOrquestaMember() && !hasEnsayoVoice()));
   el.drawerOrquestaItem.classList.toggle('hidden', !approved);
   el.drawerInicioItem.classList.toggle('hidden', !approved);
-  el.weekCard.classList.toggle('hidden', !canSeeLibreto());
+  el.weekCard.classList.toggle('hidden', !WEEK_CARD_ENABLED || !canSeeLibreto());
 }
 
 /* ── Parte pública vs. privada ── */
