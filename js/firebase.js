@@ -330,6 +330,18 @@ export async function uploadOrquestaItem({ piece, title, number, file }) {
   });
 }
 
+// Vídeos de YouTube (enlace oculto): no ocupan Storage, solo se guarda el id.
+export function addOrquestaYoutube({ piece, title, youtubeId }) {
+  return addDoc(collection(db, ORQUESTA_COLLECTION), {
+    piece,
+    media: 'youtube',
+    title: title || '',
+    number: null,
+    youtubeId,
+    createdAt: serverTimestamp(),
+  });
+}
+
 export function updateOrquestaItem(id, fields) {
   return updateDoc(doc(db, ORQUESTA_COLLECTION, id), fields);
 }

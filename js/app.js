@@ -27,6 +27,7 @@ import {
   deleteEnsayoAudio,
   listOrquestaItems,
   uploadOrquestaItem,
+  addOrquestaYoutube,
   updateOrquestaItem,
   deleteOrquestaItem,
   resetMemberPassword,
@@ -554,6 +555,10 @@ function pauseEnsayoAudios(except) {
   [...el.ensayoView.querySelectorAll('audio'), ...el.orquestaView.querySelectorAll('audio, video')].forEach((a) => {
     if (a !== except) a.pause();
   });
+  // Los vídeos de YouTube ya abiertos se pausan por su API de mensajes.
+  el.orquestaView.querySelectorAll('iframe.yt-frame').forEach((f) => {
+    if (f !== except) f.contentWindow?.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+  });
 }
 
 function compareEnsayo(a, b) {
@@ -797,10 +802,30 @@ function buildOrquestaUpload(piece) {
   box.innerHTML = `
     ${isPopurri ? '' : '<div class="field"><span>Nombre (opcional)</span><input type="text" class="ensayo-title" placeholder="Ej. Toda la pieza" /></div>'}
     <button type="button" class="btn btn-gold ensayo-upload-btn">${isPopurri ? 'Subir cuarteta' : 'Subir audio o vídeo'}</button>
+    <button type="button" class="btn btn-ghost yt-add-btn"><i class="fa-brands fa-youtube"></i> Añadir vídeo de YouTube</button>
     <input type="file" class="audio-file-input" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm" />`;
   const file = box.querySelector('input[type=file]');
   const btn = box.querySelector('.ensayo-upload-btn');
   btn.addEventListener('click', () => file.click());
+  box.querySelector('.yt-add-btn').addEventListener('click', async () => {
+    const link = window.prompt('Pega el enlace del vídeo de YouTube:');
+    if (link === null) return;
+    const youtubeId = parseYoutubeId(link);
+    if (!youtubeId) {
+      window.alert('Ese enlace no parece de un vídeo de YouTube.');
+      return;
+    }
+    const title = (window.prompt('Nombre del vídeo:') || '').trim();
+    if (!title) return;
+    try {
+      await addOrquestaYoutube({ piece, title, youtubeId });
+      await refreshOrquesta();
+      renderOrquesta();
+    } catch (err) {
+      console.error(err);
+      window.alert(`No se ha podido añadir el vídeo (${err.code || err.message || 'error desconocido'}).`);
+    }
+  });
   file.addEventListener('change', async () => {
     const f = file.files[0];
     if (!f) return;
@@ -831,24 +856,60 @@ function buildOrquestaUpload(piece) {
   return box;
 }
 
+// Acepta youtu.be/ID, youtube.com/watch?v=ID, /shorts/ID, /embed/ID, /live/ID.
+function parseYoutubeId(link) {
+  const m = String(link).trim().match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
+// Miniatura con botón de play; el reproductor de YouTube solo se carga al
+// pulsar (así una carpeta con muchos vídeos no carga muchos iframes).
+function buildYoutubeFacade(youtubeId) {
+  const box = document.createElement('button');
+  box.type = 'button';
+  box.className = 'yt-facade';
+  box.setAttribute('aria-label', 'Reproducir vídeo');
+  box.style.backgroundImage = `url("https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg")`;
+  box.innerHTML = '<span class="yt-play"><i class="fa-solid fa-play"></i></span>';
+  box.addEventListener('click', () => {
+    const frame = document.createElement('iframe');
+    frame.className = 'yt-frame';
+    frame.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`;
+    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    frame.allowFullscreen = true;
+    frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    frame.title = 'Vídeo de YouTube';
+    pauseEnsayoAudios(frame);
+    if (!el.audioEl.paused) el.audioEl.pause();
+    box.replaceWith(frame);
+  });
+  return box;
+}
+
 function buildOrquestaRow(item, director) {
   const row = document.createElement('div');
   row.className = 'ensayo-row';
-  const media = item.media === 'video'
+  const isYoutube = item.media === 'youtube';
+  const media = isYoutube ? ''
+    : item.media === 'video'
     ? `<video controls playsinline preload="metadata" src="${escapeHtml(item.url)}"></video>`
     : `<audio controls preload="none" src="${escapeHtml(item.url)}"></audio>`;
   row.innerHTML = `
     <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
     ${media}
-    ${director || isNativeApp() ? `<div class="ensayo-row-actions">
+    ${director || (isNativeApp() && !isYoutube) ? `<div class="ensayo-row-actions">
       ${director ? `<button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
       <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>` : ''}
     </div>` : ''}`;
   const mediaEl = row.querySelector('audio, video');
-  mediaEl.addEventListener('play', (e) => {
-    pauseEnsayoAudios(e.target);
-    if (!el.audioEl.paused) el.audioEl.pause();
-  });
+  if (isYoutube) {
+    row.querySelector('.ensayo-row-title').after(buildYoutubeFacade(item.youtubeId));
+  } else {
+    mediaEl.addEventListener('play', (e) => {
+      pauseEnsayoAudios(e.target);
+      if (!el.audioEl.paused) el.audioEl.pause();
+    });
+  }
   if (director) {
     const act = async (fn, msg) => {
       try {
@@ -870,7 +931,7 @@ function buildOrquestaRow(item, director) {
       act(() => deleteOrquestaItem(item), 'No se ha podido eliminar.');
     });
   }
-  attachOfflineControl(row.querySelector('.ensayo-row-actions'), item, 'orquesta', mediaEl);
+  if (!isYoutube) attachOfflineControl(row.querySelector('.ensayo-row-actions'), item, 'orquesta', mediaEl);
   return row;
 }
 
