@@ -693,7 +693,9 @@ function buildEnsayoRow(item, director) {
   row.className = 'ensayo-row';
   const voiceOptions = ENSAYO_VOICES.map((v) => `<option value="${v}" ${item.voice === v ? 'selected' : ''}>${v}</option>`).join('');
   row.innerHTML = `
-    <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
+    <div class="ensayo-row-head">
+      <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
+    </div>
     <audio controls preload="none" src="${escapeHtml(item.url)}"></audio>
     ${director || isNativeApp() ? `<div class="ensayo-row-actions">
       ${director ? `<select class="ensayo-voice-edit">${voiceOptions}</select>
@@ -701,6 +703,8 @@ function buildEnsayoRow(item, director) {
       <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>` : ''}
     </div>` : ''}`;
   const audioEl = row.querySelector('audio');
+  row.querySelector('.ensayo-row-head').appendChild(
+    buildDownloadMenu((btn) => downloadAudioFile(item, item.title || KIND_LABELS[item.piece], btn)));
   audioEl.addEventListener('play', (e) => {
     pauseEnsayoAudios(e.target);
     if (!el.audioEl.paused) el.audioEl.pause();
@@ -1837,29 +1841,12 @@ function buildAudioRow(song) {
       <div class="song-card-title">${song.title}</div>
     </div>
     ${hasAudio
-      ? `<span class="song-card-play btn-icon">${isCurrent && !el.audioEl.paused ? '⏸' : '▶'}</span>
-         <div class="song-card-more">
-           <button type="button" class="song-card-more-btn" title="Más opciones" aria-label="Más opciones"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-           <div class="song-card-menu hidden">
-             <button type="button" class="song-card-menu-item download"><i class="fa-solid fa-download"></i> Descargar audio</button>
-           </div>
-         </div>`
+      ? `<span class="song-card-play btn-icon">${isCurrent && !el.audioEl.paused ? '⏸' : '▶'}</span>`
       : '<span class="song-card-no-audio" title="Todavía no hay audio para esta letra">Sin audio</span>'}
   `;
   if (hasAudio) {
     card.addEventListener('click', () => toggleAudioRow(song));
-    const more = card.querySelector('.song-card-more');
-    const menu = card.querySelector('.song-card-menu');
-    more.addEventListener('click', (e) => e.stopPropagation());
-    more.querySelector('.song-card-more-btn').addEventListener('click', () => {
-      const wasHidden = menu.classList.contains('hidden');
-      closeSongCardMenus();
-      if (wasHidden) menu.classList.remove('hidden');
-    });
-    menu.querySelector('.download').addEventListener('click', (e) => {
-      closeSongCardMenus();
-      downloadSongAudio(song, e.currentTarget);
-    });
+    card.appendChild(buildDownloadMenu((btn) => downloadSongAudio(song, btn)));
   }
   return card;
 }
@@ -1871,12 +1858,19 @@ document.addEventListener('click', closeSongCardMenus);
 
 async function downloadSongAudio(song, btn) {
   const audio = (song.audios || []).find((a) => a.type === 'grupo') || (song.audios || [])[0];
-  if (!audio || !audio.url) return;
-  const ext = ((audio.path || '').match(/\.([a-z0-9]{2,5})$/i) || [, 'mp3'])[1];
-  const fileName = `${song.title}.${ext}`.replace(/[\\/:*?"<>|]/g, '');
+  if (!audio) return;
+  await downloadAudioFile(audio, song.title, btn);
+}
+
+// Descarga {url, path} con el nombre "titulo.ext". Compartida por Audios y
+// Local del Ensayo.
+async function downloadAudioFile({ url, path }, title, btn) {
+  if (!url) return;
+  const ext = ((path || '').match(/\.([a-z0-9]{2,5})$/i) || [, 'mp3'])[1];
+  const fileName = `${title || 'audio'}.${ext}`.replace(/[\\/:*?"<>|]/g, '');
   btn.disabled = true;
   try {
-    const res = await fetch(audio.url);
+    const res = await fetch(url);
     if (!res.ok) throw new Error(res.status);
     const blobUrl = URL.createObjectURL(await res.blob());
     const a = document.createElement('a');
@@ -1889,10 +1883,33 @@ async function downloadSongAudio(song, btn) {
   } catch (err) {
     // Si la descarga directa falla, se abre el audio en otra pestaña
     // para que se pueda guardar desde el propio navegador.
-    window.open(audio.url, '_blank', 'noopener');
+    window.open(url, '_blank', 'noopener');
   } finally {
     btn.disabled = false;
   }
+}
+
+// Menú de tres puntos con "Descargar audio" (mismo que en Audios).
+function buildDownloadMenu(onDownload) {
+  const more = document.createElement('div');
+  more.className = 'song-card-more';
+  more.innerHTML = `
+    <button type="button" class="song-card-more-btn" title="Más opciones" aria-label="Más opciones"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+    <div class="song-card-menu hidden">
+      <button type="button" class="song-card-menu-item download"><i class="fa-solid fa-download"></i> Descargar audio</button>
+    </div>`;
+  const menu = more.querySelector('.song-card-menu');
+  more.addEventListener('click', (e) => e.stopPropagation());
+  more.querySelector('.song-card-more-btn').addEventListener('click', () => {
+    const wasHidden = menu.classList.contains('hidden');
+    closeSongCardMenus();
+    if (wasHidden) menu.classList.remove('hidden');
+  });
+  menu.querySelector('.download').addEventListener('click', (e) => {
+    closeSongCardMenus();
+    onDownload(e.currentTarget);
+  });
+  return more;
 }
 
 function toggleAudioRow(song) {
