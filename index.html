@@ -334,6 +334,9 @@
           </label>
         </div>
 
+        <div class="section-label"><span class="rule"></span><h2>Fotos denunciadas</h2></div>
+        <div id="admin-reports" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
+
         <div class="section-label"><span class="rule"></span><h2>Pendientes de tu firma</h2></div>
         <div id="admin-requests" style="padding: 0 var(--space-6); display: flex; flex-direction: column; gap: var(--space-4);"></div>
 
@@ -424,6 +427,7 @@
       <img id="foto-viewer-img" alt="" />
       <div class="foto-viewer-bar">
         <span id="foto-viewer-meta"></span>
+        <button class="foto-viewer-report hidden" id="foto-viewer-report"><i class="fa-solid fa-flag"></i> Denunciar</button>
         <button class="foto-viewer-delete hidden" id="foto-viewer-delete"><i class="fa-solid fa-trash"></i> Eliminar</button>
       </div>
     </div>

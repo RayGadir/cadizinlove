@@ -38,6 +38,9 @@ import {
   listFotos,
   uploadFoto,
   deleteFoto,
+  reportFoto,
+  listFotoReports,
+  dismissFotoReports,
   deleteOwnAccount,
 } from './firebase.js';
 
@@ -130,6 +133,7 @@ const state = {
   features: { ...DEFAULT_FEATURES },
   fotos: [],
   fotosError: null,
+  fotoReports: [],
 };
 
 const el = {
@@ -179,6 +183,8 @@ const el = {
   fotoViewerImg: document.getElementById('foto-viewer-img'),
   fotoViewerMeta: document.getElementById('foto-viewer-meta'),
   fotoViewerDelete: document.getElementById('foto-viewer-delete'),
+  fotoViewerReport: document.getElementById('foto-viewer-report'),
+  adminReports: document.getElementById('admin-reports'),
   fotoViewerClose: document.getElementById('foto-viewer-close'),
   adminLibretoPublico: document.getElementById('admin-libreto-publico'),
   adminFotosAbierto: document.getElementById('admin-fotos-abierto'),
@@ -343,6 +349,7 @@ async function handleAuthChange(user) {
     state.currentMember = null;
     state.members = [];
     state.fotos = [];
+    state.fotoReports = [];
     stopRehearsal();
     closeFotoViewer();
     goAuthScreen('login');
@@ -371,7 +378,7 @@ async function handleAuthChange(user) {
   if (canSeeLibreto()) tasks.push(refreshSongs());
   if (isApprovedRole()) tasks.push(refreshEnsayo(), refreshOrquesta());
   if (member.role === 'director' || member.role === 'admin') {
-    tasks.push(refreshMembers());
+    tasks.push(refreshMembers(), refreshFotoReports());
   }
   await Promise.all(tasks);
   if (seq !== authSeq) return;
@@ -962,6 +969,67 @@ async function refreshFotos() {
   }
 }
 
+// Fotos que ya he denunciado: se me ocultan al momento (hasta que el admin
+// decida), igual que hacen las apps de redes sociales.
+const REPORTED_KEY = 'cil-fotos-denunciadas';
+function reportedSet() {
+  try { return new Set(JSON.parse(localStorage.getItem(REPORTED_KEY) || '[]')); } catch { return new Set(); }
+}
+function rememberReported(id) {
+  try {
+    const set = reportedSet(); set.add(id);
+    localStorage.setItem(REPORTED_KEY, JSON.stringify([...set]));
+  } catch { /* sin almacenamiento: no pasa nada */ }
+}
+
+async function refreshFotoReports() {
+  try {
+    state.fotoReports = await listFotoReports();
+  } catch (err) {
+    console.error(err);
+    state.fotoReports = [];
+  }
+}
+
+const REPORT_REASONS = [
+  'Contenido ofensivo o inapropiado',
+  'Es una foto mía y no quiero que aparezca',
+  'Otro motivo',
+];
+
+function startReportFoto(foto) {
+  const box = document.createElement('div');
+  box.className = 'foto-report-reasons';
+  box.innerHTML = '<p>¿Por qué quieres denunciar esta foto?</p>';
+  REPORT_REASONS.forEach((reason) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = reason;
+    b.addEventListener('click', async () => {
+      box.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+      try {
+        await reportFoto(foto, reason, state.currentMember?.name);
+        rememberReported(foto.id);
+        closeFotoViewer();
+        renderFotos();
+        window.alert('Gracias. Hemos avisado a la dirección del coro y la foto ya no se te muestra.');
+      } catch (err) {
+        console.error(err);
+        box.querySelectorAll('button').forEach((x) => { x.disabled = false; });
+        window.alert('No se ha podido enviar la denuncia. Inténtalo de nuevo.');
+      }
+    });
+    box.appendChild(b);
+  });
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'foto-report-cancel';
+  cancel.textContent = 'Cancelar';
+  cancel.addEventListener('click', () => { box.remove(); el.fotoViewer.querySelector('.foto-viewer-bar').classList.remove('hidden'); el.fotoViewerImg.classList.remove('hidden'); });
+  el.fotoViewer.querySelector('.foto-viewer-bar').classList.add('hidden');
+  el.fotoViewer.appendChild(box);
+}
+
 function canDeleteFoto(foto) {
   return isDirectorRole() || foto.uploaderUid === state.currentUser?.uid;
 }
@@ -989,7 +1057,8 @@ function renderFotos() {
   }
   const grid = document.createElement('div');
   grid.className = 'fotos-grid';
-  state.fotos.forEach((foto) => {
+  const denunciadas = reportedSet();
+  state.fotos.filter((f) => !denunciadas.has(f.id)).forEach((foto) => {
     const tile = document.createElement('button');
     tile.type = 'button';
     tile.className = 'foto-tile';
@@ -1090,6 +1159,8 @@ function openFotoViewer(foto) {
   el.fotoViewerImg.src = foto.url;
   el.fotoViewerMeta.textContent = [foto.uploaderName, formatAvisoDate(foto)].filter(Boolean).join(' · ');
   el.fotoViewerDelete.classList.toggle('hidden', !canDeleteFoto(foto));
+  el.fotoViewerReport.classList.toggle('hidden', foto.uploaderUid === state.currentUser?.uid);
+  el.fotoViewerReport.onclick = () => startReportFoto(foto);
   el.fotoViewerDelete.onclick = async () => {
     if (!window.confirm('¿Eliminar esta foto del álbum?')) return;
     el.fotoViewerDelete.disabled = true;
@@ -1109,6 +1180,8 @@ function openFotoViewer(foto) {
 }
 
 function closeFotoViewer() {
+  el.fotoViewer.querySelectorAll('.foto-report-reasons').forEach((n) => n.remove());
+  el.fotoViewer.querySelector('.foto-viewer-bar').classList.remove('hidden');
   el.fotoViewer.classList.add('hidden');
   el.fotoViewerImg.removeAttribute('src');
 }
@@ -2504,11 +2577,71 @@ function renderAdmin() {
   el.adminLibretoPublico.checked = !!state.features.libretoPublico;
   el.adminFotosAbierto.checked = !!state.features.fotosAbiertoATodos;
 
+  renderFotoReports();
+
   el.adminActivity.innerHTML = '';
   const activityEmpty = document.createElement('div');
   activityEmpty.className = 'empty-state';
   activityEmpty.textContent = 'Todavía no hay actividad registrada.';
   el.adminActivity.appendChild(activityEmpty);
+}
+
+function renderFotoReports() {
+  el.adminReports.innerHTML = '';
+  if (!state.fotoReports.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No hay fotos denunciadas.';
+    el.adminReports.appendChild(empty);
+    return;
+  }
+  // Una tarjeta por foto, con todos los motivos de quienes la han denunciado.
+  const byFoto = new Map();
+  state.fotoReports.forEach((r) => {
+    if (!byFoto.has(r.fotoId)) byFoto.set(r.fotoId, []);
+    byFoto.get(r.fotoId).push(r);
+  });
+  byFoto.forEach((reports, fotoId) => {
+    const first = reports[0];
+    const card = document.createElement('div');
+    card.className = 'ensayo-upload report-card';
+    const motivos = reports.map((r) => `${escapeHtml(r.reporterName || 'Alguien')}: ${escapeHtml(r.reason)}`).join('<br>');
+    card.innerHTML = `
+      <img alt="" src="${escapeHtml(first.fotoUrl)}" />
+      <div class="report-info">
+        <strong>Subida por ${escapeHtml(first.uploaderName || 'alguien')}</strong>
+        <span>${motivos}</span>
+        <div class="report-actions">
+          <button type="button" class="btn btn-ghost report-delete">Eliminar foto</button>
+          <button type="button" class="btn btn-ghost report-dismiss">Mantener</button>
+        </div>
+      </div>`;
+    card.querySelector('.report-delete').addEventListener('click', async () => {
+      if (!window.confirm('¿Eliminar esta foto del álbum?')) return;
+      try {
+        const foto = state.fotos.find((f) => f.id === fotoId);
+        if (foto) await deleteFoto(foto);
+        await dismissFotoReports(fotoId);
+        await Promise.all([refreshFotos(), refreshFotoReports()]);
+        renderFotos();
+        renderAdmin();
+      } catch (err) {
+        console.error(err);
+        window.alert('No se ha podido eliminar la foto.');
+      }
+    });
+    card.querySelector('.report-dismiss').addEventListener('click', async () => {
+      try {
+        await dismissFotoReports(fotoId);
+        await refreshFotoReports();
+        renderAdmin();
+      } catch (err) {
+        console.error(err);
+        window.alert('No se ha podido descartar la denuncia.');
+      }
+    });
+    el.adminReports.appendChild(card);
+  });
 }
 
 // Interruptores de la parte pública (config/features).

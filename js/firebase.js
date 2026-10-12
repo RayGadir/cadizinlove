@@ -70,6 +70,7 @@ const AVISOS_COLLECTION = 'avisos';
 const ENSAYO_COLLECTION = 'ensayo';
 const ORQUESTA_COLLECTION = 'orquesta';
 const FOTOS_COLLECTION = 'fotos';
+const FOTO_REPORTS_COLLECTION = 'fotoReportes';
 const CONFIG_COLLECTION = 'config';
 
 export function watchAuthState(callback) {
@@ -415,6 +416,34 @@ export async function deleteFoto(item) {
   await Promise.all(
     [item.path, item.thumbPath].filter(Boolean).map((p) => deleteObject(ref(storage, p)).catch(() => {}))
   );
+}
+
+/* ══════════════════════════ Denuncias de fotos ══════════════════════════ */
+// Exigido por Google Play para contenido subido por usuarios: cualquiera con
+// sesión puede denunciar una foto; solo director/admin ven las denuncias y
+// deciden (eliminar la foto o descartar la denuncia). Un documento por
+// denunciante y foto (id fotoId_uid), así que no se puede denunciar dos veces.
+export async function reportFoto(foto, reason, reporterName) {
+  const uid = auth.currentUser.uid;
+  await setDoc(doc(db, FOTO_REPORTS_COLLECTION, `${foto.id}_${uid}`), {
+    fotoId: foto.id,
+    fotoUrl: foto.thumbUrl || foto.url || '',
+    uploaderName: foto.uploaderName || '',
+    reason,
+    reporterUid: uid,
+    reporterName: reporterName || '',
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function listFotoReports() {
+  const snap = await getDocs(query(collection(db, FOTO_REPORTS_COLLECTION), orderBy('createdAt', 'desc')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function dismissFotoReports(fotoId) {
+  const snap = await getDocs(query(collection(db, FOTO_REPORTS_COLLECTION), where('fotoId', '==', fotoId)));
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 }
 
 /* ══════════════════════════ Borrado de la propia cuenta ══════════════════════════ */

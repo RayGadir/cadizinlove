@@ -117,5 +117,17 @@ service cloud.firestore {
       allow delete: if isDirectorOrAdmin()
         || (isSignedIn() && resource.data.uploaderUid == request.auth.uid);
     }
+
+    // Denuncias de fotos (requisito de Google Play para contenido de
+    // usuarios): cualquiera con sesión puede denunciar (una vez por foto, el
+    // id es fotoId_uid y no se puede modificar); solo director/admin las leen
+    // y las resuelven.
+    match /fotoReportes/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && reportId == request.resource.data.fotoId + '_' + request.auth.uid;
+      allow read, delete: if isDirectorOrAdmin();
+      allow update: if false;
+    }
   }
 }
