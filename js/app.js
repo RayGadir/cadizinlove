@@ -706,8 +706,8 @@ function buildEnsayoRow(item, director) {
     <audio controls preload="none" src="${escapeHtml(item.url)}"></audio>
     ${director || isNativeApp() ? `<div class="ensayo-row-actions">
       ${director ? `<select class="ensayo-voice-edit">${voiceOptions}</select>
-      <button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
-      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>` : ''}
+      <button class="btn btn-ghost rename" style="min-height:32px;font-size:12px;">Renombrar</button>
+      <button class="btn btn-ghost delete" style="min-height:32px;font-size:12px;">Eliminar</button>` : ''}
     </div>` : ''}`;
   const audioEl = row.querySelector('audio');
   row.querySelector('.ensayo-row-head').appendChild(
@@ -909,8 +909,8 @@ function buildOrquestaRow(item, director) {
     <div class="ensayo-row-title">${escapeHtml(item.title || KIND_LABELS[item.piece])}</div>
     ${media}
     ${director || (isNativeApp() && !isYoutube) ? `<div class="ensayo-row-actions">
-      ${director ? `<button class="btn btn-ghost rename" style="min-height:32px;font-size:11px;">Renombrar</button>
-      <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>` : ''}
+      ${director ? `<button class="btn btn-ghost rename" style="min-height:32px;font-size:12px;">Renombrar</button>
+      <button class="btn btn-ghost delete" style="min-height:32px;font-size:12px;">Eliminar</button>` : ''}
     </div>` : ''}`;
   const mediaEl = row.querySelector('audio, video');
   if (isYoutube) {
@@ -1367,7 +1367,7 @@ function renderPerfil() {
   const form = document.createElement('div');
   form.className = 'ensayo-upload';
   form.innerHTML = `
-    <h2 style="margin:0;font-family:var(--font-heading);font-weight:500;font-size:16px;">Cambiar contraseña</h2>
+    <h2 style="margin:0;font-family:var(--font-heading);font-weight:500;font-size:17.5px;">Cambiar contraseña</h2>
     <label class="field">
       <span>Contraseña actual</span>
       <div class="password-field">
@@ -1450,7 +1450,7 @@ function buildDeleteAccountBox() {
   const box = document.createElement('div');
   box.className = 'ensayo-upload delete-account';
   box.innerHTML = `
-    <h2 style="margin:0;font-family:var(--font-heading);font-weight:500;font-size:16px;">Eliminar mi cuenta</h2>
+    <h2 style="margin:0;font-family:var(--font-heading);font-weight:500;font-size:17.5px;">Eliminar mi cuenta</h2>
     <p class="delete-account-note">Se borran tu cuenta, tus datos y las fotos que hayas subido. No se puede deshacer.</p>
     <button type="button" class="btn btn-ghost delete-account-open">Eliminar mi cuenta</button>
     <div class="delete-account-form hidden">
@@ -2071,7 +2071,7 @@ function renderDirector() {
         <span class="status">${items.length ? (hasAudio ? 'Letra y audio' : 'Solo letra') : 'Sin letra'}</span>
       </div>
       <div class="piece-card-actions">
-        <button class="btn btn-gold add-song" style="min-height:38px;font-size:12px;">Añadir canción</button>
+        <button class="btn btn-gold add-song" style="min-height:38px;font-size:13px;">Añadir canción</button>
       </div>
       <div class="piece-song-list"></div>
     `;
@@ -2138,7 +2138,7 @@ function renderDirectorRemoved() {
           <span class="name-input" style="display:block;"></span>
           <span class="voice"></span>
         </span>
-        <button type="button" class="btn btn-primary member-reactivate" style="min-height:32px;font-size:11px;">Activar</button>
+        <button type="button" class="btn btn-primary member-reactivate" style="min-height:32px;font-size:12px;">Activar</button>
       </div>`;
     row.querySelector('.name-input').textContent = m.name || '';
     row.querySelector('.voice').textContent = m.email || memberVoices(m).join(', ') || '';
@@ -2168,7 +2168,7 @@ function buildMemberRow(m) {
         <span class="voice">${memberVoices(m).join(', ') || 'Sin voz asignada'}</span>
       </span>
       <span class="role" style="color:${meta.color};border:1px solid ${meta.border};">${meta.label}</span>
-      <button type="button" class="btn btn-ghost member-options-toggle" style="min-height:32px;font-size:11px;">Opciones</button>
+      <button type="button" class="btn btn-ghost member-options-toggle" style="min-height:32px;font-size:12px;">Opciones</button>
     </div>
     <div class="member-options-panel hidden">
       <label class="field">
@@ -2298,9 +2298,9 @@ function buildDirectorSongRow(song) {
   row.innerHTML = `
     <span class="title">${song.title}</span>
     <div class="audio-chips"></div>
-    <button class="btn btn-ghost ensayo" style="min-height:32px;font-size:11px;">${song.enEnsayo ? '★ En ensayo' : '☆ Ensayo'}</button>
-    <button class="btn btn-ghost edit" style="min-height:32px;font-size:11px;">Editar letra</button>
-    <button class="btn btn-ghost delete" style="min-height:32px;font-size:11px;">Eliminar</button>
+    <button class="btn btn-ghost ensayo" style="min-height:32px;font-size:12px;">${song.enEnsayo ? '★ En ensayo' : '☆ Ensayo'}</button>
+    <button class="btn btn-ghost edit" style="min-height:32px;font-size:12px;">Editar letra</button>
+    <button class="btn btn-ghost delete" style="min-height:32px;font-size:12px;">Eliminar</button>
   `;
 
   // Por ahora solo se sube un audio por canción (el de grupo). Cuando haga
