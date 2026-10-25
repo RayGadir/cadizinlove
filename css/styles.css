@@ -161,13 +161,25 @@ a:hover { color: var(--accent-200); }
 }
 .password-toggle:hover { color: var(--text); }
 
-/* El autocompletado de Chrome pinta el campo con su propio fondo claro
-   (ignorando nuestro CSS); sin esto el ojo queda claro-sobre-claro. */
-.password-field > input:-webkit-autofill,
-.password-field > input:-webkit-autofill:hover,
-.password-field > input:-webkit-autofill:focus {
+/* El autocompletado (Chrome, y sobre todo el Llavero de iPhone/Safari) pinta
+   el campo con su propio fondo claro ignorando nuestro CSS. Antes solo se
+   forzaba el texto a claro, y en Safari el fondo seguía claro: al pulsar el
+   ojo la contraseña era claro-sobre-claro, invisible. La sombra interior
+   tapa ese fondo en ambos navegadores; texto y fondo van siempre en pareja. */
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus {
   -webkit-text-fill-color: #f6efe2;
+  -webkit-box-shadow: 0 0 0 1000px #2a1c24 inset;
+  caret-color: #f6efe2;
   transition: background-color 9999s ease-in-out 0s;
+}
+.panel-screen .field input:-webkit-autofill,
+.panel-screen .field input:-webkit-autofill:hover,
+.panel-screen .field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--neutral-900);
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  caret-color: var(--neutral-900);
 }
 
 .search-input {
