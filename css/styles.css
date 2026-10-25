@@ -223,6 +223,7 @@ a:hover { color: var(--accent-200); }
 .menu-btn span:nth-child(3) { display: block; width: 10px; height: 1.5px; background: var(--gold); }
 
 .header-title { flex: 1; min-width: 0; }
+.header-home { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .header-kicker { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--neutral-500); }
 .header-name { font-family: var(--font-display); font-weight: 500; font-size: 19px; line-height: 1.1; }
 

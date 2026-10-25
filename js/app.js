@@ -1616,6 +1616,7 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.menu-btn')) openDrawer();
 });
 el.adminAvatar.addEventListener('click', () => goScreen('perfil'));
+document.getElementById('header-home')?.addEventListener('click', () => goScreen(isApprovedRole() ? 'inicio' : 'fotos'));
 el.drawerBackdrop.addEventListener('click', closeDrawer);
 el.drawerNav.addEventListener('click', (e) => {
   const btn = e.target.closest('.drawer-item');
