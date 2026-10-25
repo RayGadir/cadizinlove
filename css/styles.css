@@ -223,7 +223,7 @@ a:hover { color: var(--accent-200); }
 .menu-btn span:nth-child(3) { display: block; width: 10px; height: 1.5px; background: var(--gold); }
 
 .header-title { flex: 1; min-width: 0; }
-.header-home { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.header-home { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .header-kicker { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--neutral-500); }
 .header-name { font-family: var(--font-display); font-weight: 500; font-size: 19px; line-height: 1.1; }
 
@@ -1029,3 +1029,7 @@ a:hover { color: var(--accent-200); }
 .delete-account-form.hidden { display: none; }
 .delete-account .delete-account-confirm { color: #b00020; border-color: rgba(176,0,32,0.45); background: transparent; }
 .delete-account .delete-account-confirm:hover { background: rgba(176,0,32,0.06); }
+
+/* Evita el desplazamiento lateral en iOS (WebView): nada debe sobresalir del ancho de pantalla */
+html { overflow-x: hidden; max-width: 100%; overscroll-behavior-x: none; }
+body { max-width: 100%; overflow-x: clip; overscroll-behavior-x: none; }
