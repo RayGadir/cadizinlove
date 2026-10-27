@@ -100,6 +100,10 @@
               <button type="button" class="password-toggle" data-target="signup-password" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
             </div>
           </label>
+          <label class="login-remember signup-terms">
+            <input type="checkbox" id="signup-terms" />
+            <span>He leído y acepto las <a href="terminos.html">condiciones de uso</a> y la <a href="privacidad.html">política de privacidad</a>. Entiendo que no se tolera contenido ofensivo ni usuarios abusivos.</span>
+          </label>
           <div class="auth-error hidden" id="signup-error"></div>
           <button id="signup-submit" class="login-submit" style="border-color: var(--accent); color: var(--accent-300);">Enviar solicitud</button>
         </div>
@@ -428,6 +432,7 @@
       <div class="foto-viewer-bar">
         <span id="foto-viewer-meta"></span>
         <button class="foto-viewer-report hidden" id="foto-viewer-report"><i class="fa-solid fa-flag"></i> Denunciar</button>
+        <button class="foto-viewer-report hidden" id="foto-viewer-block"><i class="fa-solid fa-ban"></i> Bloquear usuario</button>
         <button class="foto-viewer-delete hidden" id="foto-viewer-delete"><i class="fa-solid fa-trash"></i> Eliminar</button>
       </div>
     </div>

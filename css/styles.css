@@ -1033,3 +1033,10 @@ a:hover { color: var(--accent-200); }
 /* Evita el desplazamiento lateral en iOS (WebView): nada debe sobresalir del ancho de pantalla */
 html { overflow-x: hidden; max-width: 100%; overscroll-behavior-x: none; }
 body { max-width: 100%; overflow-x: clip; overscroll-behavior-x: none; }
+
+/* Condiciones de uso en el alta y usuarios bloqueados (norma 1.2 de Apple) */
+.signup-terms { align-items: flex-start; line-height: 1.45; }
+.signup-terms input { flex: none; margin-top: 3px; }
+.signup-terms a { color: var(--gold); }
+.foto-viewer-report:disabled { opacity: 0.5; }
+.blocked-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-top: 1px solid rgba(255,255,255,0.08); }

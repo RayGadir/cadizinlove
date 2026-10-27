@@ -129,5 +129,11 @@ service cloud.firestore {
       allow read, delete: if isDirectorOrAdmin();
       allow update: if false;
     }
+
+    // Usuarios bloqueados (norma 1.2 de Apple): cada uno lee y escribe solo
+    // su propia lista.
+    match /bloqueos/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
   }
 }

@@ -71,6 +71,7 @@ const ENSAYO_COLLECTION = 'ensayo';
 const ORQUESTA_COLLECTION = 'orquesta';
 const FOTOS_COLLECTION = 'fotos';
 const FOTO_REPORTS_COLLECTION = 'fotoReportes';
+const BLOCKS_COLLECTION = 'bloqueos';
 const CONFIG_COLLECTION = 'config';
 
 export function watchAuthState(callback) {
@@ -107,6 +108,9 @@ export async function changeOwnPassword(currentPassword, newPassword) {
 // Crea la cuenta y, junto a ella, su ficha de socio en Firestore con
 // role: "pendiente" — nadie puede auto-asignarse un rol distinto: las
 // reglas de Firestore solo dejan crear la ficha propia con ese rol fijo.
+// Versión de las condiciones de uso (terminos.html) que acepta quien se registra.
+export const TERMS_VERSION = '2026-10-27';
+
 export async function requestAccess({ name, email, password }) {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   await setDoc(doc(db, MEMBERS_COLLECTION, credential.user.uid), {
@@ -116,6 +120,8 @@ export async function requestAccess({ name, email, password }) {
     voices: [],
     approvedByDirector: false,
     approvedByAdmin: false,
+    termsAcceptedAt: serverTimestamp(),
+    termsVersion: TERMS_VERSION,
     createdAt: serverTimestamp(),
   });
   return credential.user;
@@ -458,6 +464,24 @@ export async function deleteOwnAccount(password) {
   await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
   const mine = await getDocs(query(collection(db, FOTOS_COLLECTION), where('uploaderUid', '==', user.uid)));
   await Promise.all(mine.docs.map((d) => deleteFoto({ id: d.id, ...d.data() })));
+  await deleteDoc(doc(db, BLOCKS_COLLECTION, user.uid)).catch(() => {});
   await deleteDoc(doc(db, MEMBERS_COLLECTION, user.uid)).catch(() => {});
   await deleteUser(user);
+}
+
+/* ══════════════════════════ Usuarios bloqueados ══════════════════════════ */
+// Exigido por Apple (norma 1.2) para contenido subido por usuarios: cada uno
+// puede bloquear a otro usuario y deja de ver todo lo que suba. La lista vive
+// en bloqueos/{miUid} (solo la lee y la escribe su dueño), así se conserva
+// aunque se reinstale la app o se entre desde otro dispositivo.
+export async function getMyBlocks() {
+  const snap = await getDoc(doc(db, BLOCKS_COLLECTION, auth.currentUser.uid));
+  return snap.exists() ? (snap.data().users || []) : [];
+}
+
+export function setMyBlocks(users) {
+  return setDoc(doc(db, BLOCKS_COLLECTION, auth.currentUser.uid), {
+    users,
+    updatedAt: serverTimestamp(),
+  });
 }

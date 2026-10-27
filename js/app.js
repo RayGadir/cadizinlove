@@ -42,6 +42,8 @@ import {
   listFotoReports,
   dismissFotoReports,
   deleteOwnAccount,
+  getMyBlocks,
+  setMyBlocks,
 } from './firebase.js';
 
 // Repertorio de un coro de Carnaval de Cádiz. Los cuplés y los estribillos se
@@ -134,6 +136,7 @@ const state = {
   fotos: [],
   fotosError: null,
   fotoReports: [],
+  blocked: [],
 };
 
 const el = {
@@ -184,6 +187,8 @@ const el = {
   fotoViewerMeta: document.getElementById('foto-viewer-meta'),
   fotoViewerDelete: document.getElementById('foto-viewer-delete'),
   fotoViewerReport: document.getElementById('foto-viewer-report'),
+  fotoViewerBlock: document.getElementById('foto-viewer-block'),
+  signupTerms: document.getElementById('signup-terms'),
   adminReports: document.getElementById('admin-reports'),
   fotoViewerClose: document.getElementById('foto-viewer-close'),
   adminLibretoPublico: document.getElementById('admin-libreto-publico'),
@@ -350,6 +355,7 @@ async function handleAuthChange(user) {
     state.members = [];
     state.fotos = [];
     state.fotoReports = [];
+    state.blocked = [];
     stopRehearsal();
     closeFotoViewer();
     goAuthScreen('login');
@@ -373,7 +379,7 @@ async function handleAuthChange(user) {
   state.orquestaFolder = null;
   state.songs = [];
   state.avisos = [];
-  const tasks = [refreshFotos()];
+  const tasks = [refreshFotos(), refreshBlocks()];
   if (isApprovedRole()) tasks.push(refreshAvisos());
   if (canSeeLibreto()) tasks.push(refreshSongs());
   if (isApprovedRole()) tasks.push(refreshEnsayo(), refreshOrquesta());
@@ -982,6 +988,82 @@ function rememberReported(id) {
   } catch { /* sin almacenamiento: no pasa nada */ }
 }
 
+/* Bloqueo de usuarios (norma 1.2 de Apple): quien bloquea a alguien deja de
+   ver sus fotos, y la dirección recibe aviso como si fuera una denuncia. */
+async function refreshBlocks() {
+  try {
+    state.blocked = await getMyBlocks();
+  } catch (err) {
+    console.error(err);
+    state.blocked = [];
+  }
+}
+
+function blockedUids() {
+  return new Set(state.blocked.map((b) => b.uid));
+}
+
+async function blockUploader(foto) {
+  const name = foto.uploaderName || 'este usuario';
+  if (!window.confirm(`¿Bloquear a ${name}? Dejarás de ver todas sus fotos y avisaremos a la dirección del coro. Puedes desbloquearlo desde Mi perfil.`)) return;
+  el.fotoViewerBlock.disabled = true;
+  try {
+    const next = state.blocked.filter((b) => b.uid !== foto.uploaderUid)
+      .concat({ uid: foto.uploaderUid, name: foto.uploaderName || '' });
+    await setMyBlocks(next);
+    state.blocked = next;
+    // Aviso a la dirección para que revise a ese usuario (si ya la había
+    // denunciado, la denuncia existe y no se duplica).
+    await reportFoto(foto, 'Ha bloqueado al usuario que subió esta foto', state.currentMember?.name).catch(() => {});
+    closeFotoViewer();
+    renderFotos();
+    window.alert(`Has bloqueado a ${name}. Ya no verás su contenido.`);
+  } catch (err) {
+    console.error(err);
+    window.alert('No se ha podido bloquear al usuario. Inténtalo de nuevo.');
+  } finally {
+    el.fotoViewerBlock.disabled = false;
+  }
+}
+
+function buildBlockedUsersBox() {
+  const box = document.createElement('div');
+  box.className = 'ensayo-upload blocked-users';
+  box.innerHTML = '<h2>Usuarios bloqueados</h2><p class="delete-account-note">No ves el contenido que suben estas personas.</p>';
+  if (!state.blocked.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-state';
+    empty.textContent = 'No has bloqueado a nadie.';
+    box.appendChild(empty);
+    return box;
+  }
+  state.blocked.forEach((b) => {
+    const row = document.createElement('div');
+    row.className = 'blocked-row';
+    row.innerHTML = `<span>${escapeHtml(b.name || 'Usuario sin nombre')}</span>`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-ghost';
+    btn.textContent = 'Desbloquear';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const next = state.blocked.filter((x) => x.uid !== b.uid);
+        await setMyBlocks(next);
+        state.blocked = next;
+        box.replaceWith(buildBlockedUsersBox());
+      } catch (err) {
+        console.error(err);
+        btn.disabled = false;
+        window.alert('No se ha podido desbloquear. Inténtalo de nuevo.');
+      }
+    });
+    row.appendChild(btn);
+    box.appendChild(row);
+  });
+  return box;
+}
+
 async function refreshFotoReports() {
   try {
     state.fotoReports = await listFotoReports();
@@ -1058,7 +1140,8 @@ function renderFotos() {
   const grid = document.createElement('div');
   grid.className = 'fotos-grid';
   const denunciadas = reportedSet();
-  state.fotos.filter((f) => !denunciadas.has(f.id)).forEach((foto) => {
+  const bloqueados = blockedUids();
+  state.fotos.filter((f) => !denunciadas.has(f.id) && !bloqueados.has(f.uploaderUid)).forEach((foto) => {
     const tile = document.createElement('button');
     tile.type = 'button';
     tile.className = 'foto-tile';
@@ -1161,6 +1244,8 @@ function openFotoViewer(foto) {
   el.fotoViewerDelete.classList.toggle('hidden', !canDeleteFoto(foto));
   el.fotoViewerReport.classList.toggle('hidden', foto.uploaderUid === state.currentUser?.uid);
   el.fotoViewerReport.onclick = () => startReportFoto(foto);
+  el.fotoViewerBlock.classList.toggle('hidden', !foto.uploaderUid || foto.uploaderUid === state.currentUser?.uid);
+  el.fotoViewerBlock.onclick = () => blockUploader(foto);
   el.fotoViewerDelete.onclick = async () => {
     if (!window.confirm('¿Eliminar esta foto del álbum?')) return;
     el.fotoViewerDelete.disabled = true;
@@ -1393,6 +1478,7 @@ function renderPerfil() {
     <button type="button" class="btn btn-gold profile-pw-save">Guardar contraseña</button>
   `;
   view.appendChild(form);
+  view.appendChild(buildBlockedUsersBox());
   view.appendChild(buildDeleteAccountBox());
 
   const currentInput = form.querySelector('.profile-current-pw');
@@ -1696,6 +1782,11 @@ el.signupSubmit.addEventListener('click', async () => {
   const email = el.signupEmail.value.trim();
   const password = el.signupPassword.value;
   if (!name || !email || !password) return showAuthError(el.signupError, { code: 'auth/missing-password' });
+  if (!el.signupTerms.checked) {
+    el.signupError.textContent = 'Para crear la cuenta tienes que aceptar las condiciones de uso.';
+    el.signupError.classList.remove('hidden');
+    return;
+  }
   el.signupSubmit.disabled = true;
   try {
     const user = await requestAccess({ name, email, password });
