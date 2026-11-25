@@ -3128,6 +3128,27 @@ el.audioEl.addEventListener('timeupdate', () => {
   updateKaraokeHighlight();
 });
 
+// Actualización automática: la app Android/iOS carga esta web, pero al salir
+// y volver el sistema suele reanudar la página ya cargada sin pedirla de
+// nuevo. Al volver a primer plano (y cada 10 min) se mira si hay una versión
+// publicada distinta y, si la hay, se recarga — salvo con audio sonando, para
+// no cortar un ensayo (se reintenta en la siguiente comprobación).
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
+
+async function checkForUpdate() {
+  if (!APP_VERSION || !el.audioEl.paused) return;
+  try {
+    const res = await fetch(`/index.html?check=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const live = (await res.text()).match(/<meta name="app-version" content="([^"]+)"/)?.[1];
+    if (live && live !== APP_VERSION) window.location.reload();
+  } catch (e) { /* sin conexión: ya se comprobará luego */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdate();
+});
+setInterval(checkForUpdate, 10 * 60 * 1000);
+
 syncBottomPadding();
 goAuthScreen('login');
 loadData();
