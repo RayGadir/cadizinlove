@@ -127,6 +127,8 @@ const state = {
   audioType: 'grupo',
   currentSongId: null,
   loopEnabled: false,
+  selectedSongIds: new Set(),
+  selectionMode: false,
   letraSongId: null,
   letraLines: [],
   letraAllowAudio: true,
@@ -258,6 +260,10 @@ const el = {
   directorCrearTimbrazo: document.getElementById('director-crear-timbrazo'),
   adminInvitar: document.getElementById('admin-invitar'),
 
+  selectionBar: document.getElementById('selection-bar'),
+  selectionPlay: document.getElementById('selection-play'),
+  selectionPlayLabel: document.getElementById('selection-play-label'),
+  selectionClear: document.getElementById('selection-clear'),
   rehearsalToggle: document.getElementById('rehearsal-toggle'),
   rehearsalBar: document.getElementById('rehearsal-bar'),
   rehearsalClose: document.getElementById('rehearsal-close'),
@@ -1808,8 +1814,33 @@ el.searchInput.addEventListener('input', () => {
 /* ══════════════════════════ Inicio (tablón) ══════════════════════════ */
 
 function renderInicio() {
+  renderCountdown();
   renderAvisos();
   renderRepertoireSummary();
+}
+
+// Cuenta atrás hasta la actuación (17 de enero de 2027), justo encima de
+// los timbrazos. Cuenta días naturales en la hora local del móvil; el
+// mismo día dice "¡Hoy actuamos!" y a partir del día siguiente desaparece.
+const ACTUACION_DATE = new Date(2027, 0, 17);
+
+function renderCountdown() {
+  const slot = document.getElementById('countdown-slot');
+  if (!slot) return;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((ACTUACION_DATE - today) / 86400000);
+  if (days < 0) { slot.innerHTML = ''; return; }
+  const label = days === 0
+    ? '<strong class="countdown-today">¡Hoy actuamos!</strong>'
+    : `<span class="countdown-pre">${days === 1 ? 'Falta' : 'Faltan'}</span>
+       <strong class="countdown-num">${days}</strong>
+       <span class="countdown-unit">${days === 1 ? 'día' : 'días'}</span>`;
+  slot.innerHTML = `
+    <div class="countdown-card">
+      <div class="countdown-kicker">Actuamos el 17 de enero</div>
+      <div class="countdown-main">${label}</div>
+    </div>`;
 }
 
 const AVISO_TYPE_LABELS = { notificacion: 'Nueva letra', aviso: 'Timbrazo' };
@@ -1978,6 +2009,7 @@ function renderSectioned(container, mode) {
       : 'Todavía no hay canciones aquí.';
     container.appendChild(empty);
   }
+  if (mode === 'audios') renderSelectionBar();
 }
 
 function buildLibretoRow(song) {
@@ -2001,6 +2033,9 @@ function buildAudioRow(song) {
   card.className = 'song-card' + (isCurrent ? ' is-playing' : '');
   card.style.setProperty('--card-color', `var(--kind-${song.kind})`);
   card.innerHTML = `
+    ${hasAudio
+      ? `<label class="song-card-check" title="Seleccionar para reproducir en bucle"><input type="checkbox"${state.selectedSongIds.has(song.id) ? ' checked' : ''} aria-label="Seleccionar ${escapeHtml(song.title)}" /></label>`
+      : ''}
     <div>
       <div class="song-card-kind">${KIND_LABELS[song.kind] || song.kind}</div>
       <div class="song-card-title">${song.title}</div>
@@ -2010,6 +2045,13 @@ function buildAudioRow(song) {
       : '<span class="song-card-no-audio" title="Todavía no hay audio para esta letra">Sin audio</span>'}
   `;
   if (hasAudio) {
+    const check = card.querySelector('.song-card-check');
+    check.addEventListener('click', (e) => e.stopPropagation());
+    check.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) state.selectedSongIds.add(song.id);
+      else state.selectedSongIds.delete(song.id);
+      renderSelectionBar();
+    });
     card.addEventListener('click', () => toggleAudioRow(song));
     card.appendChild(buildDownloadMenu((btn) => downloadSongAudio(song, btn)));
   }
@@ -2145,6 +2187,52 @@ function updateKaraokeHighlight() {
 }
 
 el.letraBack.addEventListener('click', () => goScreen('libreto'));
+
+// Pellizcar con dos dedos sobre la letra la amplía o reduce. El zoom de la
+// página está desactivado (viewport user-scalable=no), así que se escala solo
+// el tamaño del texto vía --letra-scale y se recuerda para la próxima vez.
+const LETRA_SCALE_KEY = 'cil:letraScale';
+const LETRA_SCALE_MIN = 0.7;
+const LETRA_SCALE_MAX = 2.6;
+let letraScale = 1;
+try { letraScale = parseFloat(localStorage.getItem(LETRA_SCALE_KEY)) || 1; } catch (e) { /* sin almacenamiento */ }
+
+function applyLetraScale() {
+  el.letraLines.style.setProperty('--letra-scale', letraScale.toFixed(3));
+}
+applyLetraScale();
+
+let pinchStartDist = 0;
+let pinchStartScale = 1;
+const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+el.letraLines.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 2) return;
+  pinchStartDist = touchDist(e.touches);
+  pinchStartScale = letraScale;
+  el.letraLines.classList.add('pinching');
+}, { passive: true });
+
+el.letraLines.addEventListener('touchmove', (e) => {
+  if (e.touches.length !== 2 || !pinchStartDist) return;
+  e.preventDefault();
+  const ratio = touchDist(e.touches) / pinchStartDist;
+  letraScale = Math.min(LETRA_SCALE_MAX, Math.max(LETRA_SCALE_MIN, pinchStartScale * ratio));
+  applyLetraScale();
+}, { passive: false });
+
+function endLetraPinch(e) {
+  if (!pinchStartDist || e.touches.length >= 2) return;
+  pinchStartDist = 0;
+  el.letraLines.classList.remove('pinching');
+  try { localStorage.setItem(LETRA_SCALE_KEY, String(letraScale)); } catch (err) { /* sin almacenamiento */ }
+}
+el.letraLines.addEventListener('touchend', endLetraPinch);
+el.letraLines.addEventListener('touchcancel', endLetraPinch);
+// Safari (iOS) lanza sus propios eventos de gesto: se anulan sobre la letra
+// para que no intente hacer zoom de la página a la vez.
+el.letraLines.addEventListener('gesturestart', (e) => e.preventDefault());
+el.letraLines.addEventListener('gesturechange', (e) => e.preventDefault());
 
 /* ══════════════════════════ Panel del Director ══════════════════════════ */
 
@@ -2814,6 +2902,7 @@ function playSongAudio(song, type) {
   const url = getAudioUrl(song, type);
   if (!url) return;
   state.rehearsalMode = false;
+  state.selectionMode = false;
   state.playlist = [song];
   state.playlistIndex = 0;
   state.audioType = type;
@@ -2828,6 +2917,7 @@ function playSongAudio(song, type) {
 
 function playSingleSong(song) {
   state.rehearsalMode = false;
+  state.selectionMode = false;
   state.playlist = getPlayableSongs();
   state.playlistIndex = state.playlist.findIndex((s) => s.id === song.id);
   if (state.playlistIndex === -1) {
@@ -2855,6 +2945,7 @@ function startRehearsal() {
   if (playlist.length === 0) return;
 
   state.rehearsalMode = true;
+  state.selectionMode = false;
   state.audioType = el.audioTypeSelect.value;
   state.playlist = playlist;
   state.playlistIndex = 0;
@@ -2862,8 +2953,39 @@ function startRehearsal() {
   playCurrent();
 }
 
+// Pistas marcadas con el check en Audios: suenan en el orden del libreto y,
+// al acabar la última, vuelve a empezar por la primera (bucle continuo).
+function getSelectedSongs() {
+  return state.songs
+    .filter((s) => state.selectedSongIds.has(s.id) && (s.audios || []).length > 0)
+    .sort(compareSongs);
+}
+
+function renderSelectionBar() {
+  const count = getSelectedSongs().length;
+  el.selectionBar.classList.toggle('hidden', count === 0);
+  el.selectionPlayLabel.textContent = `Reproducir ${count} en bucle`;
+}
+
+function playSelection() {
+  const playlist = getSelectedSongs();
+  if (playlist.length === 0) return;
+  if (state.rehearsalMode) stopRehearsal();
+  state.selectionMode = true;
+  state.playlist = playlist;
+  state.playlistIndex = 0;
+  playCurrent();
+}
+
+el.selectionPlay.addEventListener('click', playSelection);
+el.selectionClear.addEventListener('click', () => {
+  state.selectedSongIds.clear();
+  renderSectioned(el.audiosList, 'audios');
+});
+
 function stopRehearsal() {
   state.rehearsalMode = false;
+  state.selectionMode = false;
   state.currentSongId = null;
   el.rehearsalBar.classList.add('hidden');
   el.audioEl.pause();
@@ -2920,6 +3042,9 @@ function playNext() {
   if (state.playlistIndex < state.playlist.length - 1) {
     state.playlistIndex += 1;
     playCurrent();
+  } else if (state.selectionMode) {
+    state.playlistIndex = 0;
+    playCurrent();
   } else if (state.rehearsalMode) {
     stopRehearsal();
   }
@@ -2928,6 +3053,9 @@ function playNext() {
 function playPrev() {
   if (state.playlistIndex > 0) {
     state.playlistIndex -= 1;
+    playCurrent();
+  } else if (state.selectionMode) {
+    state.playlistIndex = state.playlist.length - 1;
     playCurrent();
   }
 }

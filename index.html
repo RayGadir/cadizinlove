@@ -200,6 +200,7 @@
           <h1 id="inicio-greeting">Bienvenido</h1>
           <p id="inicio-subtitle">Aquí verás los avisos de dirección y las novedades del libreto.</p>
         </div>
+        <div id="countdown-slot" class="countdown-slot"></div>
         <div id="avisos-list" class="avisos-list"></div>
         <div class="week-card hidden" id="week-card">
           <div class="repertoire-summary">
@@ -218,6 +219,10 @@
       <section id="audios-view" class="screen hidden">
         <div class="audios-toolbar">
           <button id="rehearsal-toggle" class="btn btn-primary">Modo ensayo</button>
+        </div>
+        <div class="selection-bar hidden" id="selection-bar">
+          <button id="selection-play" class="btn btn-primary"><i class="fa-solid fa-repeat"></i> <span id="selection-play-label">Reproducir selección</span></button>
+          <button id="selection-clear" class="btn btn-ghost">Quitar selección</button>
         </div>
         <div id="audios-list"></div>
       </section>
